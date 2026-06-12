@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="jdbc:postgresql://localhost:5435/vitryne_db [DEBUG]" group="​ApiApplication" uuid="fb9f0c85-171a-4973-b6c2-80038539b513">
+    <data-source source="LOCAL" name="jdbc:postgresql://localhost:5435/vitryne_db [DEBUG]" group="​ApiApplication" uuid="3880f8a3-407c-46cb-a4e9-010c0ef9be2e">
       <driver-ref>postgresql</driver-ref>
       <synchronize>true</synchronize>
       <imported>true</imported>
