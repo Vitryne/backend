@@ -1,0 +1,18 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: vitryne-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${KEY_DB_USER}
+      POSTGRES_PASSWORD: ${KEY_DB_PASSWORD}
+      POSTGRES_DB: ${KEY_DB}
+    ports:
+      - "${KEY_DB_PORT}:5432"
+    volumes:
+      - vitryne_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  vitryne_postgres_data:
