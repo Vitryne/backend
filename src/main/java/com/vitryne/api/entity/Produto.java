@@ -65,22 +65,15 @@ public class Produto {
     }
 
     public Boolean verificarDisponibilidade(String tamanho){
-        return estoques.stream().anyMatch(
-                e -> e.getTamanho().equals(tamanho) && e.getQuantidade() > 0
-        );
+        return buscarEstoquePorTamanho(tamanho).map(Estoque::estaDisponivel).orElse(false);
     }
 
-    public void AtualizarEstoque(String tamanho, Integer quantidade){
-        if(quantidade == null || quantidade < 0 ){
-            throw new IllegalArgumentException("Quantidade invalida");
-        }
+    public void reporEstoque(String tamanho, Integer qtd) {
+        Estoque estoque = buscarEstoquePorTamanho(tamanho)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Tamanho não cadastrado para este produto: " + tamanho));
 
-        Estoque estoque = buscarEstoquePorTamanho(tamanho).orElseGet(() -> {
-            Estoque novo = Estoque.builder().produto(this).tamanho(tamanho).quantidade(0).build();
-            this.estoques.add(novo);
-            return novo;
-        });
-        estoque.setQuantidade(quantidade);
+        estoque.aumentarEstoque(qtd);
     }
 
     public void darBaixaEstoque(String tamanho, Integer qtd) {
@@ -96,7 +89,24 @@ public class Produto {
             throw new EstoqueInsuficienteException(tamanho, estoque.getQuantidade(), qtd);
         }
 
-        estoque.setQuantidade(estoque.getQuantidade() - qtd);
+        estoque.diminuirEstoque(qtd);
+    }
+
+    public void cadastrarTamanho(String tamanho, Integer quantidadeInicial) {
+        if (buscarEstoquePorTamanho(tamanho).isPresent()) {
+            throw new IllegalArgumentException("Tamanho já cadastrado: " + tamanho);
+        }
+        if (quantidadeInicial == null || quantidadeInicial < 0) {
+            throw new IllegalArgumentException("Quantidade inválida: " + quantidadeInicial);
+        }
+
+        Estoque novo = Estoque.builder()
+                .produto(this)
+                .tamanho(tamanho)
+                .quantidade(quantidadeInicial)
+                .build();
+
+        this.estoques.add(novo);
     }
 
     private java.util.Optional<Estoque> buscarEstoquePorTamanho(String tamanho){
