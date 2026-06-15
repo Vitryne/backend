@@ -19,16 +19,16 @@ A arquitetura segue o padrão de **Monólito Modular** com bounded contexts insp
 
 ## Stack
 
-| Camada | Tecnologias                        |
-|---|------------------------------------|
-| Linguagem | Java 21                            |
-| Framework | Spring Boot 3.x                    |
-| Banco de dados | PostgreSQL                         |
-| Cache / Sessão | Redis                              |
-| Migrations | Flyway                             |
-| Autenticação | Spring Security + JWT              |
-| Documentação da API | SpringDoc OpenAPI (Swagger UI)     |
-| Containerização | Docker + Docker Compose            |
+| Camada | Tecnologias |
+|---|-------|
+| Linguagem | Java 21 |
+| Framework | Spring Boot 3.x |
+| Banco de dados | PostgreSQL |
+| Cache / Sessão | Redis |
+| Migrations | Flyway |
+| Autenticação | Spring Security + JWT |
+| Documentação da API | SpringDoc OpenAPI (Swagger UI) |
+| Containerização | Docker + Docker Compose |
 | Testes | JUnit 5 + Mockito + Testcontainers |
 
 ---
