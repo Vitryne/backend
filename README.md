@@ -20,8 +20,8 @@ A arquitetura segue o padrão de **Monólito Modular** com bounded contexts insp
 ## Stack
 
 | Camada | Tecnologias |
-|---|---|
-| Linguagem | Java 17 |
+|---|-------|
+| Linguagem | Java 21 |
 | Framework | Spring Boot 3.x |
 | Banco de dados | PostgreSQL |
 | Cache / Sessão | Redis |
