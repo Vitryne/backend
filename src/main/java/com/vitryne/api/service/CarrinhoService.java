@@ -4,22 +4,26 @@ import com.vitryne.api.dto.AdicionarItemRequestDTO;
 import com.vitryne.api.dto.CarrinhoResponseDTO;
 import com.vitryne.api.dto.ItemCarrinhoResponseDTO;
 import com.vitryne.api.entity.Carrinho;
+import com.vitryne.api.entity.Estoque;
 import com.vitryne.api.entity.ItemCarrinho;
-import com.vitryne.api.exception.CarrinhoNaoEncontradoException;
-import com.vitryne.api.exception.ItemCarrinhoNaoEncontradoException;
+import com.vitryne.api.exception.*;
 import com.vitryne.api.repository.CarrinhoRepository;
+import com.vitryne.api.repository.EstoqueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
 public class CarrinhoService {
 
     private final CarrinhoRepository carrinhoRepository;
+    private final EstoqueRepository estoqueRepository;
 
     @Transactional(readOnly = true)
     public CarrinhoResponseDTO buscarPorUsuario(Long usuarioId) {
@@ -29,19 +33,36 @@ public class CarrinhoService {
     @Transactional
     public CarrinhoResponseDTO adicionarItem(Long usuarioId, AdicionarItemRequestDTO request) {
         validarQuantidade(request.quantidade());
-        validarPreco(request.precoUnitario());
+
+        Estoque estoque = buscarEstoque(request.estoqueId());
+
+        if (!estoque.estaDisponivel()) {
+            throw new EstoqueIndisponivelException(estoque.getTamanho());
+        }
 
         Carrinho carrinho = obterOuCriar(usuarioId);
-
         ItemCarrinho existente = buscarItemPorEstoque(carrinho, request.estoqueId());
+
+        Integer quantidadeFinal = (existente != null)
+                ? existente.getQuantidade() + request.quantidade()
+                : request.quantidade();
+
+        if (quantidadeFinal > estoque.getQuantidade()) {
+            throw new QuantidadeIndisponivelException(
+                    estoque.getTamanho(), estoque.getQuantidade(), quantidadeFinal);
+        }
+
+        Double precoUnitario = estoque.getProduto().calcularPrecoFinal();
+
         if (existente != null) {
-            existente.setQuantidade(existente.getQuantidade() + request.quantidade());
+            existente.setQuantidade(quantidadeFinal);
+            existente.setPrecoUnitario(precoUnitario);
         } else {
             ItemCarrinho novo = ItemCarrinho.builder()
                     .carrinho(carrinho)
                     .estoqueId(request.estoqueId())
                     .quantidade(request.quantidade())
-                    .precoUnitario(request.precoUnitario())
+                    .precoUnitario(precoUnitario)
                     .build();
             carrinho.getItens().add(novo);
         }
@@ -55,6 +76,12 @@ public class CarrinhoService {
 
         Carrinho carrinho = buscarCarrinho(usuarioId);
         ItemCarrinho item = buscarItemPorId(carrinho, itemId);
+        Estoque estoque = buscarEstoque(item.getEstoqueId());
+
+        if(quantidade > estoque.getQuantidade()){
+            throw new QuantidadeIndisponivelException(estoque.getTamanho(), estoque.getQuantidade(), quantidade);
+        }
+
         item.setQuantidade(quantidade);
 
         return persistir(carrinho);
@@ -133,16 +160,22 @@ public class CarrinhoService {
         }
     }
 
-    private void validarPreco(Double preco) {
-        if (preco == null || preco < 0) {
-            throw new IllegalArgumentException("Preço unitário inválido: " + preco);
-        }
+    private Estoque buscarEstoque(Long estoqueId){
+        return estoqueRepository.findById(estoqueId).orElseThrow(() -> new EstoqueNaoEncontradoException(estoqueId));
     }
 
-
     private CarrinhoResponseDTO toResponseDTO(Carrinho carrinho) {
-        List<ItemCarrinhoResponseDTO> itens = carrinho.getItens().stream()
-                .map(this::toItemResponseDTO)
+        List<ItemCarrinho> itensCarrinho = carrinho.getItens();
+
+        List<Long> estoqueIds = itensCarrinho.stream()
+                .map(ItemCarrinho::getEstoqueId)
+                .toList();
+
+        Map<Long, Estoque> estoquesPorId = estoqueRepository.findAllById(estoqueIds).stream()
+                .collect(Collectors.toMap(Estoque::getId, e -> e));
+
+        List<ItemCarrinhoResponseDTO> itens = itensCarrinho.stream()
+                .map(item -> toItemResponseDTO(item, estoquesPorId.get(item.getEstoqueId())))
                 .toList();
 
         return CarrinhoResponseDTO.builder()
@@ -154,13 +187,23 @@ public class CarrinhoService {
                 .build();
     }
 
-    private ItemCarrinhoResponseDTO toItemResponseDTO(ItemCarrinho item) {
-        return ItemCarrinhoResponseDTO.builder()
+    private ItemCarrinhoResponseDTO toItemResponseDTO(ItemCarrinho item, Estoque estoque) {
+        ItemCarrinhoResponseDTO.ItemCarrinhoResponseDTOBuilder builder = ItemCarrinhoResponseDTO.builder()
                 .id(item.getId())
                 .estoqueId(item.getEstoqueId())
                 .quantidade(item.getQuantidade())
                 .precoUnitario(item.getPrecoUnitario())
-                .subtotal(calcularSubtotal(item))
-                .build();
+                .subtotal(calcularSubtotal(item));
+
+        if (estoque != null) {
+            builder.tamanho(estoque.getTamanho())
+                    .produtoId(estoque.getProduto().getId())
+                    .nomeProduto(estoque.getProduto().getNome())
+                    .fotoUrl(estoque.getProduto().getFotosUrls().isEmpty()
+                            ? null
+                            : estoque.getProduto().getFotosUrls().get(0));
+        }
+
+        return builder.build();
     }
 }
