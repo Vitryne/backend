@@ -4,14 +4,16 @@
     <p>catálogo, pedidos, pagamento e entrega da plataforma Vitryne. </p>
     <br>
 
-[![Java](https://skillicons.dev/icons?i=java,spring,postgres,redis,docker)](https://skillicons.dev)
+[![Java](https://skillicons.dev/icons?i=java,spring,postgres,docker)](https://skillicons.dev)
 </div>
 
 ---
 
 ## Sobre
 
-O `vitryne-backend` é o núcleo da plataforma Vitryne. Expõe uma API REST stateless que serve a aplicação web e o aplicativo mobile, gerenciando os domínios de identidade, catálogo, pedidos, pagamento, entrega e notificações.
+O `vitryne-backend` é o núcleo da plataforma Vitryne. Expõe uma API REST stateless que serve a aplicação web e o aplicativo mobile.
+
+A visão do produto cobre os domínios de identidade, catálogo, pedidos, pagamento, entrega e notificações. **Atualmente** a API implementa o núcleo de **catálogo de produtos, estoque e carrinho** — os demais domínios estão no roadmap (veja [Roadmap](#roadmap)).
 
 A arquitetura segue o padrão de **Monólito Modular** com bounded contexts inspirados em DDD, onde cada módulo se comunica via interfaces, mantendo o isolamento do domínio sem a complexidade operacional de microsserviços.
 
@@ -19,27 +21,39 @@ A arquitetura segue o padrão de **Monólito Modular** com bounded contexts insp
 
 ## Stack
 
+### Em uso hoje
+
 | Camada | Tecnologias |
-|---|---|
-| Linguagem | Java 17 |
-| Framework | Spring Boot 3.x |
+|---|-------|
+| Linguagem | Java 21 |
+| Framework | Spring Boot 4.0.x |
 | Banco de dados | PostgreSQL |
-| Cache / Sessão | Redis |
 | Migrations | Flyway |
-| Autenticação | Spring Security + JWT |
-| Documentação da API | SpringDoc OpenAPI (Swagger UI) |
+| Persistência | Spring Data JPA |
+| Produtividade | Lombok |
 | Containerização | Docker + Docker Compose |
-| Testes | JUnit 5 + Mockito + Testcontainers |
+| Testes | JUnit 5 |
+
+### Planejado para próximas features
+
+> Estas tecnologias **ainda não estão integradas** ao projeto e serão adicionadas conforme as features de cada domínio evoluírem.
+
+| Camada | Tecnologia | Quando |
+|---|---|---|
+| Cache / Sessão | Redis | Carrinho sincronizado e cache de catálogo |
+| Autenticação | Spring Security + JWT | Módulo `identity` |
+| Documentação da API | SpringDoc OpenAPI (Swagger UI) | Próxima iteração de DX |
+| Testes | Mockito + Testcontainers | Cobertura de integração |
+| Cobertura | JaCoCo | Métricas de qualidade |
 
 ---
 
 ## Pré-requisitos
 
-- [Java 17+](https://adoptium.net/)
-- [Maven 3.9+](https://maven.apache.org/)
+- [Java 21+](https://adoptium.net/)
+- [Maven 3.9+](https://maven.apache.org/) *(ou use o wrapper `./mvnw` incluído)*
 - [Docker e Docker Compose](https://www.docker.com/)
-- [PostgreSQL 16+](https://www.postgresql.org/) *(se rodar sem Docker)*
-- [Redis 7+](https://redis.io/) *(se rodar sem Docker)*
+- [PostgreSQL 15+](https://www.postgresql.org/) *(se rodar sem Docker)*
 
 ---
 
@@ -52,7 +66,9 @@ A arquitetura segue o padrão de **Monólito Modular** com bounded contexts insp
 git clone https://github.com/Vitryne/vitryne-backend.git
 cd vitryne-backend
 
-# Suba os containers (aplicação + banco + cache)
+# Crie o arquivo .env na raiz (veja a seção Variáveis de Ambiente)
+
+# Suba os containers (aplicação + banco)
 docker-compose up --build
 ```
 
@@ -63,81 +79,75 @@ docker-compose up --build
 git clone https://github.com/Vitryne/vitryne-backend.git
 cd vitryne-backend
 
-# Configure as variáveis de ambiente (veja a seção abaixo)
-cp .env.example .env
+# Crie o arquivo .env na raiz (veja a seção Variáveis de Ambiente)
+# e tenha um PostgreSQL acessível nas credenciais informadas
 
 # Execute a aplicação
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+./mvnw spring-boot:run
 ```
 
-A API estará disponível em `http://localhost:8080`.  
-A documentação interativa (Swagger UI) estará em `http://localhost:8080/swagger-ui.html`.
+A API estará disponível em `http://localhost:8080`.
 
 ---
 
 ## Variáveis de Ambiente
 
-Crie um arquivo `.env` na raiz do projeto com base no `.env.example`:
+Crie um arquivo `.env` na raiz do projeto. As variáveis abaixo são as utilizadas hoje:
 
 ```env
 # Banco de dados
-DB_URL=jdbc:postgresql://localhost:5432/vitryne
-DB_USERNAME=vitryne
-DB_PASSWORD=senha_segura
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# JWT
-JWT_SECRET=sua_chave_secreta_de_no_minimo_256_bits
-JWT_EXPIRATION_MS=86400000
-JWT_REFRESH_EXPIRATION_MS=604800000
-
-# Gateway de pagamento
-PAYMENT_GATEWAY_KEY=sua_chave_de_api
-PAYMENT_GATEWAY_SECRET=seu_segredo
-
-# Notificações push (FCM)
-FCM_SERVER_KEY=sua_chave_fcm
+KEY_DB_USER=vitryne_user
+KEY_DB_PASSWORD=sua_senha_segura
+KEY_DB=vitryne_db
+KEY_DB_PORT=5435
 ```
 
-> **Nunca versione o arquivo `.env` com credenciais reais.** O `.gitignore` já exclui este arquivo por padrão.
+O `application.properties` carrega esse arquivo via `spring.config.import=optional:file:.env[.properties]`.
+
+> **Nunca versione o arquivo `.env` com credenciais reais.** Adicione `.env` ao `.gitignore` e mantenha apenas valores de exemplo no repositório.
 
 ---
 
 ## Estrutura do Projeto
 
 ```
-src/main/java/com/vitryne/
-├── config/          # Configurações: Security, CORS, Swagger, WebSocket, Redis
+src/main/java/com/vitryne/api/
 ├── controller/      # Controllers REST — apenas delegação para services
-├── dto/
-│   ├── request/     # DTOs de entrada (dados recebidos pela API)
-│   └── response/    # DTOs de saída (dados retornados pela API)
+├── dto/             # DTOs de entrada e saída da API
 ├── entity/          # Entidades JPA mapeadas para o banco de dados
-├── enums/           # Enumerações de domínio (UserRole, OrderStatus, etc.)
 ├── exception/       # Exceções customizadas e handler global (@ControllerAdvice)
 ├── repository/      # Repositórios Spring Data JPA
-├── service/         # Lógica de negócio isolada por domínio
-│   └── impl/        # Implementações concretas dos services
-├── security/        # Filtros JWT, configuração de autenticação e autorização
-├── util/            # Utilitários e helpers transversais
-└── integration/     # Integrações externas: pagamento, geolocalização, FCM
+└── service/         # Lógica de negócio isolada por domínio
+
+src/main/resources/
+├── application.properties
+└── db/migration/    # Scripts de migração Flyway
 ```
+
+> Conforme novos domínios forem implementados, a estrutura deve crescer com pacotes como `config/`, `security/`, `enums/`, `util/` e `integration/`.
 
 ---
 
 ## Módulos de Domínio
+
+### Implementados
+
+| Módulo | Responsabilidade |
+|---|---|
+| `produto` (catalog) | Cadastro de produtos e tamanhos disponíveis |
+| `estoque` (supply) | Controle de disponibilidade e quantidade por produto |
+| `carrinho` (cart) | Carrinho de compras com itens e quantidades |
+
+### Roadmap
+
+> Domínios planejados que ainda **não foram implementados**.
 
 | Módulo | Responsabilidade |
 |---|---|
 | `identity` | Autenticação, autorização e ciclo de vida de tokens JWT |
 | `user` | Cadastro e gestão de perfis (Consumidor, Lojista, Entregador) |
 | `store` | Cadastro, configuração e status de lojas |
-| `catalog` | Produtos, categorias, fotos, estoque e preços promocionais |
 | `search` | Busca por proximidade geográfica com filtros combinados |
-| `cart` | Carrinho persistido e sincronizado por sessão |
 | `order` | Ciclo de vida do pedido e order splitting por loja |
 | `payment` | Integração com gateway, pré-autorização e estornos |
 | `delivery` | Acionamento de entregadores, rastreamento e geofencing |
@@ -146,25 +156,11 @@ src/main/java/com/vitryne/
 
 ---
 
-## Profiles
-
-| Profile | Uso |
-|---|---|
-| `dev` | Desenvolvimento local com logs detalhados |
-| `staging` | Homologação > gateway de pagamento em sandbox |
-| `prod` | Produção > variáveis via ambiente, logs estruturados |
-
----
-
 ## Testes
 
 ```bash
 # Executar todos os testes
 ./mvnw test
-
-# Executar com relatório de cobertura (JaCoCo)
-./mvnw verify
 ```
 
-O relatório de cobertura é gerado em `target/site/jacoco/index.html`.  
-A meta mínima do projeto é **70% de cobertura** nas camadas `service` e `controller`.
+> A configuração de cobertura (JaCoCo) e testes de integração (Mockito + Testcontainers) estão no roadmap. A meta de qualidade do projeto será **70% de cobertura** nas camadas `service` e `controller`.

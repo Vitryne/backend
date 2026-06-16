@@ -14,5 +14,18 @@ services:
     volumes:
       - vitryne_postgres_data:/var/lib/postgresql/data
 
+  api:
+    build: .
+    container_name: vitryne-api
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${KEY_DB}
+
 volumes:
   vitryne_postgres_data:
