@@ -5,9 +5,11 @@ import com.vitryne.api.dto.AtualizarItemRequestDTO;
 import com.vitryne.api.dto.CarrinhoResponseDTO;
 import com.vitryne.api.service.CarrinhoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+@Slf4j
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/carrinho")
@@ -17,30 +19,47 @@ public class CarrinhoController {
 
     @GetMapping("/{usuarioId}")
     public ResponseEntity<CarrinhoResponseDTO> buscarPorUsuario(@PathVariable Long usuarioId) {
-        return ResponseEntity.ok(carrinhoService.buscarPorUsuario(usuarioId));
+        log.info("Recebida requisição para buscar carrinho do usuário ID: {}", usuarioId);
+        CarrinhoResponseDTO response = carrinhoService.buscarPorUsuario(usuarioId);
+        log.info("Carrinho do usuário ID: {} retornado com sucesso", usuarioId);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{usuarioId}/itens")
     public ResponseEntity<CarrinhoResponseDTO> adicionarItem(@PathVariable Long usuarioId,
                                                              @RequestBody AdicionarItemRequestDTO request) {
-        return ResponseEntity.ok(carrinhoService.adicionarItem(usuarioId, request));
+        log.info("Recebida requisição para adicionar item ao carrinho do usuário ID: {}", usuarioId);
+        log.info("Json request: {}", request);
+        CarrinhoResponseDTO response = carrinhoService.adicionarItem(usuarioId, request);
+        log.info("Item adicionado com sucesso ao carrinho do usuário ID: {}", usuarioId);
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/{usuarioId}/itens/{itemId}")
     public ResponseEntity<CarrinhoResponseDTO> atualizarQuantidadeItem(@PathVariable Long usuarioId,
                                                                        @PathVariable Long itemId,
                                                                        @RequestBody AtualizarItemRequestDTO request) {
-        return ResponseEntity.ok(carrinhoService.atualizarQuantidadeItem(usuarioId, itemId, request.quantidade()));
+        log.info("Recebida requisição para atualizar quantidade do item ID: {} no carrinho do usuário ID: {}", itemId, usuarioId);
+        log.info("Json request: {}", request);
+        CarrinhoResponseDTO response = carrinhoService.atualizarQuantidadeItem(usuarioId, itemId, request.quantidade());
+        log.info("Quantidade do item ID: {} atualizada com sucesso no carrinho do usuário ID: {}", itemId, usuarioId);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{usuarioId}/itens/{itemId}")
     public ResponseEntity<CarrinhoResponseDTO> removerItem(@PathVariable Long usuarioId,
                                                            @PathVariable Long itemId) {
-        return ResponseEntity.ok(carrinhoService.removerItem(usuarioId, itemId));
+        log.info("Recebida requisição para remover item ID: {} do carrinho do usuário ID: {}", itemId, usuarioId);
+        CarrinhoResponseDTO response = carrinhoService.removerItem(usuarioId, itemId);
+        log.info("Item ID: {} removido com sucesso do carrinho do usuário ID: {}", itemId, usuarioId);
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{usuarioId}/itens")
     public ResponseEntity<CarrinhoResponseDTO> limpar(@PathVariable Long usuarioId) {
-        return ResponseEntity.ok(carrinhoService.limpar(usuarioId));
+        log.info("Recebida requisição para limpar o carrinho do usuário ID: {}", usuarioId);
+        CarrinhoResponseDTO response = carrinhoService.limpar(usuarioId);
+        log.info("Carrinho do usuário ID: {} limpo com sucesso", usuarioId);
+        return ResponseEntity.ok(response);
     }
 }
