@@ -6,7 +6,7 @@ import com.vitryne.api.dto.CartResponseDTO;
 import com.vitryne.api.dto.CartItemResponseDTO;
 import com.vitryne.api.entity.Cart;
 import com.vitryne.api.entity.Stock;
-import com.vitryne.api.entity.ItemCart;
+import com.vitryne.api.entity.CartItem;
 import com.vitryne.api.exception.*;
 import com.vitryne.api.repository.CartRepository;
 import com.vitryne.api.repository.StockRepository;
@@ -42,7 +42,7 @@ public class CartService {
             throw new StockUnavailableException(stock.getSize());
         }
         Cart cart = getOrCreate(userId);
-        ItemCart existingItem = findItemByStockId(cart, request.stockId());
+        CartItem existingItem = findItemByStockId(cart, request.stockId());
         Integer finalQuantity = (existingItem != null)
                 ? existingItem.getQuantity() + request.quantity()
                 : request.quantity();
@@ -56,7 +56,7 @@ public class CartService {
             existingItem.setQuantity(finalQuantity);
             existingItem.setUnitPrice(unitPrice);
         } else {
-            ItemCart newItem = ItemCart.builder()
+            CartItem newItem = CartItem.builder()
                     .cart(cart)
                     .stockId(request.stockId())
                     .quantity(request.quantity())
@@ -73,7 +73,7 @@ public class CartService {
         Integer quantity = request.quantity();
         validateQuantity(quantity);
         Cart cart = searchCartByUserId(userId);
-        ItemCart item = findItemById(cart, itemId);
+        CartItem item = findItemById(cart, itemId);
         Stock stock = findStockById(item.getStockId());
         if(quantity > stock.getQuantity()){
             logInsufficientStockWarning(stock, quantity);
@@ -87,7 +87,7 @@ public class CartService {
     @Transactional
     public CartResponseDTO removeItem(Long userId, Long itemId) {
         Cart cart = searchCartByUserId(userId);
-        ItemCart item = findItemById(cart, itemId);
+        CartItem item = findItemById(cart, itemId);
         cart.getItems().remove(item);
         log.info("Item removed successfully: [{}]", item.getId());
         return persist(cart);
@@ -125,7 +125,7 @@ public class CartService {
                 .sum();
     }
 
-    private Double calculateSubtotal(ItemCart item) {
+    private Double calculateSubtotal(CartItem item) {
         if (item.getUnitPrice() == null || item.getQuantity() == null) {
             return 0.0;
         }
@@ -151,9 +151,9 @@ public class CartService {
     }
 
 
-    private ItemCart findItemById(Cart cart, Long itemId) {
+    private CartItem findItemById(Cart cart, Long itemId) {
         log.info("Finding item by id: [{}]", itemId);
-        ItemCart cartItem = cart.getItems().stream()
+        CartItem cartItem = cart.getItems().stream()
                 .filter(i -> i.getId() != null && i.getId().equals(itemId))
                 .findFirst()
                 .orElseThrow(() -> {
@@ -163,9 +163,9 @@ public class CartService {
         return cartItem;
     }
 
-    private ItemCart findItemByStockId(Cart cart, Long stockId) {
+    private CartItem findItemByStockId(Cart cart, Long stockId) {
         log.info("Finding item in cart by stockId: [{}]", stockId);
-        ItemCart cartItem = cart.getItems().stream()
+        CartItem cartItem = cart.getItems().stream()
                 .filter(i -> i.getStockId().equals(stockId))
                 .findFirst()
                 .orElse(null);
@@ -185,9 +185,9 @@ public class CartService {
     }
 
     private CartResponseDTO toResponseDTO(Cart cart) {
-        List<ItemCart> cartItems = cart.getItems();
+        List<CartItem> cartItems = cart.getItems();
         List<Long> stockIds = cartItems.stream()
-                .map(ItemCart::getStockId)
+                .map(CartItem::getStockId)
                 .toList();
         Map<Long, Stock> stockById = stockRepository.findAllById(stockIds).stream()
                 .collect(Collectors.toMap(Stock::getId, s -> s));
@@ -203,7 +203,7 @@ public class CartService {
                 .build();
     }
 
-    private CartItemResponseDTO toItemResponseDTO(ItemCart item, Stock stock) {
+    private CartItemResponseDTO toItemResponseDTO(CartItem item, Stock stock) {
         CartItemResponseDTO.CartItemResponseDTOBuilder builder = CartItemResponseDTO.builder()
                 .id(item.getId())
                 .stockId(item.getStockId())

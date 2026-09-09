@@ -1,4 +1,3 @@
-com/vitryne/api/entity/ItemCart.class
 com/vitryne/api/dto/ProductResponseDTO.class
 com/vitryne/api/dto/CartResponseDTO.class
 com/vitryne/api/exception/InsufficientStockException.class
@@ -13,12 +12,12 @@ com/vitryne/api/config/CorsConfig.class
 com/vitryne/api/exception/CartItemNotFoundException.class
 com/vitryne/api/entity/Stock.class
 com/vitryne/api/exception/UnavailableQuantityException.class
+com/vitryne/api/entity/CartItem.class
 com/vitryne/api/entity/Cart.class
 com/vitryne/api/dto/UpdateItemRequestDTO.class
+com/vitryne/api/entity/CartItem$CartItemBuilder.class
 com/vitryne/api/repository/ProductRepository.class
-com/vitryne/api/repository/ItemCartRepository.class
 com/vitryne/api/exception/ProductNotFoundException.class
-com/vitryne/api/entity/ItemCart$ItemCartBuilder.class
 com/vitryne/api/service/CartService.class
 com/vitryne/api/controller/StockController.class
 com/vitryne/api/service/ProductService.class
@@ -37,3 +36,4 @@ com/vitryne/api/exception/StockNotFoundException.class
 com/vitryne/api/controller/CartController.class
 com/vitryne/api/ApiApplication.class
 com/vitryne/api/exception/StockUnavailableException.class
+com/vitryne/api/repository/CartItemRepository.class

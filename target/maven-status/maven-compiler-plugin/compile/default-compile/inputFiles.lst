@@ -10,7 +10,7 @@
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/dto/ProductResponseDTO.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/dto/UpdateItemRequestDTO.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/entity/Cart.java
-/Users/henrique.alves/backend/src/main/java/com/vitryne/api/entity/ItemCart.java
+/Users/henrique.alves/backend/src/main/java/com/vitryne/api/entity/CartItem.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/entity/Product.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/entity/Stock.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/exception/CartItemNotFoundException.java
@@ -22,8 +22,8 @@
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/exception/StockNotFoundException.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/exception/StockUnavailableException.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/exception/UnavailableQuantityException.java
+/Users/henrique.alves/backend/src/main/java/com/vitryne/api/repository/CartItemRepository.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/repository/CartRepository.java
-/Users/henrique.alves/backend/src/main/java/com/vitryne/api/repository/ItemCartRepository.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/repository/ProductRepository.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/repository/StockRepository.java
 /Users/henrique.alves/backend/src/main/java/com/vitryne/api/service/CartService.java

@@ -9,8 +9,8 @@ import lombok.*;
 @Getter
 @Setter
 @Entity
-@Table(name = "item_cart")
-public class ItemCart {
+@Table(name = "cart_item")
+public class CartItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
