@@ -2,10 +2,10 @@ package com.vitryne.api.dto;
 
 import jakarta.validation.constraints.NotNull;
 
-public record AdicionarItemRequestDTO(
+public record AddItemRequestDTO(
         @NotNull
-        Long estoqueId,
+        Long stockId,
         @NotNull
-        Integer quantidade
+        Integer quantity
 ) {
 }

@@ -6,6 +6,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/estoque")
-public class EstoqueController {
+@RequestMapping("/stock")
+public class StockController {
 }

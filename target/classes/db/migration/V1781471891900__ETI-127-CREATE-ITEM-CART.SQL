@@ -1,14 +1,14 @@
-CREATE TABLE item_carrinho (
-                               id              BIGSERIAL PRIMARY KEY,
-                               carrinho_id     BIGINT NOT NULL,
-                               estoque_id      BIGINT NOT NULL,
-                               quantidade      INTEGER NOT NULL,
-                               preco_unitario  NUMERIC(10,2) NOT NULL,
+CREATE TABLE IF NOT EXISTS item_cart (
+                            id           BIGSERIAL PRIMARY KEY,
+                            cart_id      BIGINT NOT NULL,
+                            stock_id     BIGINT NOT NULL,
+                            quantity     INTEGER NOT NULL,
+                            unit_price   NUMERIC(10,2) NOT NULL,
 
-                               CONSTRAINT fk_item_carrinho_carrinho FOREIGN KEY (carrinho_id) REFERENCES carrinho_compras(id) ON DELETE CASCADE,
-                               CONSTRAINT fk_item_carrinho_estoque FOREIGN KEY (estoque_id) REFERENCES estoque(id),
-                               CONSTRAINT chk_item_carrinho_quantidade CHECK (quantidade > 0),
-                               CONSTRAINT uq_item_carrinho_estoque UNIQUE (carrinho_id, estoque_id)
+                            CONSTRAINT fk_item_cart_cart FOREIGN KEY (cart_id) REFERENCES cart(id) ON DELETE CASCADE,
+                            CONSTRAINT fk_item_cart_stock FOREIGN KEY (stock_id) REFERENCES stock(id),
+                            CONSTRAINT chk_item_cart_quantity CHECK (quantity > 0),
+                            CONSTRAINT uq_item_cart_stock UNIQUE (cart_id, stock_id)
 );
 
-CREATE INDEX idx_item_carrinho_carrinho_id ON item_carrinho(carrinho_id);
+CREATE INDEX IF NOT EXISTS idx_item_cart_cart_id ON item_cart(cart_id);

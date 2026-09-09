@@ -1,16 +1,16 @@
-CREATE TABLE produto (
-                         id                  BIGSERIAL PRIMARY KEY,
-                         nome                VARCHAR(255) NOT NULL,
-                         descricao           TEXT,
-                         preco               NUMERIC(10,2) NOT NULL,
-                         preco_promocional   NUMERIC(10,2),
-                         tipo                VARCHAR(50) NOT NULL,
-                         cor                 VARCHAR(50),
-                         avaliacao           REAL DEFAULT 0,
-                         status              VARCHAR(20) NOT NULL DEFAULT 'ATIVO',
-                         fotos_urls          TEXT[],
+CREATE TABLE IF NOT EXISTS product (
+                          id                  BIGSERIAL PRIMARY KEY,
+                          name                VARCHAR(255) NOT NULL,
+                          description         TEXT,
+                          price               NUMERIC(10,2) NOT NULL,
+                          promotional_price   NUMERIC(10,2),
+                          type                VARCHAR(50) NOT NULL,
+                          color               VARCHAR(50),
+                          rating              REAL DEFAULT 0,
+                          status              VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                          photo_urls          TEXT[],
 
-                         CONSTRAINT chk_produto_status CHECK (status IN ('ATIVO', 'INATIVO')),
-                         CONSTRAINT chk_produto_avaliacao CHECK (avaliacao >= 0 AND avaliacao <= 5),
-                         CONSTRAINT chk_produto_preco_promocional CHECK (preco_promocional IS NULL OR preco_promocional <= preco)
+                          CONSTRAINT chk_product_status CHECK (status IN ('ACTIVE', 'INACTIVE')),
+                          CONSTRAINT chk_product_rating CHECK (rating >= 0 AND rating <= 5),
+                          CONSTRAINT chk_product_promotional_price CHECK (promotional_price IS NULL OR promotional_price <= price)
 );

@@ -2,8 +2,8 @@ package com.vitryne.api.dto;
 
 import jakarta.validation.constraints.NotNull;
 
-public record AtualizarItemRequestDTO(
+public record UpdateItemRequestDTO(
         @NotNull
-        Integer quantidade
+        Integer quantity
 ) {
 }
