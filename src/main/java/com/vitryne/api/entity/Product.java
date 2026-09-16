@@ -6,6 +6,8 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Builder
@@ -28,10 +30,10 @@ public class Product {
     private String description;
 
     @Column(name = "price")
-    private Double price;
+    private BigDecimal price;
 
     @Column(name = "promotional_price")
-    private Double promotionalPrice;
+    private BigDecimal promotionalPrice;
 
     @Column(name = "type")
     private String type;
@@ -45,6 +47,12 @@ public class Product {
     @Column(name = "status")
     private String status;
 
+    @Column(name = "promotional_start_date")
+    private LocalDateTime promotionalStartDate;
+
+    @Column(name = "promotional_end_date")
+    private LocalDateTime promotionalEndDate;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "photo_urls", columnDefinition = "text[]")
     private List<String> photoUrls;
@@ -53,6 +61,7 @@ public class Product {
     private List<Stock> stocks;
 
     //relate product to a Store in the future
+    //relacionar avaliacao e loja
 
 
     public Double calculateFinalPrice(){
