@@ -1,6 +1,6 @@
 package com.vitryne.api.entity;
 
-import com.vitryne.api.exception.InsufficientStockException;
+import com.vitryne.api.exception.NullPromotionArgument;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -17,7 +17,7 @@ import java.util.List;
 @Setter
 @Entity
 @Table(name = "product")
-public class Product {
+public class  Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -53,6 +53,9 @@ public class Product {
     @Column(name = "promotional_end_date")
     private LocalDateTime promotionalEndDate;
 
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "photo_urls", columnDefinition = "text[]")
     private List<String> photoUrls;
@@ -60,70 +63,50 @@ public class Product {
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Stock> stocks;
 
-    //relate product to a Store in the future
-    //relacionar avaliacao e loja
+    /*@OneToMany(mappedBy = "produto")
+    private List<Review> reviews;
+
+    @OneToOne(mappedBy = "store_id")
+    private Store storeId;*/
 
 
-    public Double calculateFinalPrice(){
-        return (promotionalPrice != null) ? promotionalPrice : price;
-    }
+    public BigDecimal calculateFinalPrice(){
 
-    public void applyDiscount(Double percentage){
-        if(percentage == null || percentage <= 0 || percentage >= 100){
-            throw new IllegalArgumentException("Invalid discount percentage");
+        if(isItInSale()){
+            return promotionalPrice;
         }
 
-        this.promotionalPrice = this.price * (1 - percentage / 100);
+        return price;
     }
 
-    public void removeDiscount(){
-        this.promotionalPrice = null;
+    public boolean isNew(){
+        return createdAt.isAfter(LocalDateTime.now().minusDays(7));
+    }
+
+    public void configureSale(BigDecimal promoPrice, LocalDateTime startDate, LocalDateTime endDate){
+        if(startDate != null && endDate != null && promoPrice != null){
+            if(&& promoPrice.compareTo(price) < 0){
+                this.promotionalStartDate = startDate;
+                this.promotionalEndDate = endDate;
+                this.promotionalPrice = promoPrice;
+            }
+        }else{
+            throw new NullPromotionArgument();
+        }
+    }
+
+    public boolean isItInSale(){
+        if(promotionalStartDate != null && promotionalEndDate != null && promotionalPrice != null) {
+            return !promotionalStartDate.isAfter(promotionalEndDate) && !LocalDateTime.now().isAfter(promotionalStartDate) && !LocalDateTime.now().isAfter(promotionalEndDate);
+        } else{
+            return false;
+        }
     }
 
     public Boolean checkAvailability(String size){
         return findStockBySize(size).map(Stock::isAvailable).orElse(false);
     }
 
-    public void restockBySize(String size, Integer quantity) {
-        Stock stock = findStockBySize(size)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Size not registered for this product: " + size));
-
-        stock.increaseStock(quantity);
-    }
-
-    public void decreaseStockBySize(String size, Integer quantity) {
-        if (quantity == null || quantity <= 0) {
-            throw new IllegalArgumentException("Invalid quantity for stock decrease: " + quantity);
-        }
-
-        Stock stock = findStockBySize(size)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Size not registered for this product: " + size));
-
-        if (stock.getQuantity() < quantity) {
-            throw new InsufficientStockException(size, stock.getQuantity(), quantity);
-        }
-
-        stock.decreaseStock(quantity);
-    }
-
-    public void registerSize(String size, Integer initialQuantity) {
-        if (findStockBySize(size).isPresent()) {
-            throw new IllegalArgumentException("Size already registered: " + size);
-        }
-        if (initialQuantity == null || initialQuantity < 0) {
-            throw new IllegalArgumentException("Invalid quantity: " + initialQuantity);
-        }
-
-        Stock newStock = Stock.builder()
-                .product(this)
-                .size(size)
-                .quantity(initialQuantity)
-                .build();
-
-        this.stocks.add(newStock);
-    }
 
     private java.util.Optional<Stock> findStockBySize(String size){
         return stocks.stream().filter(s -> s.getSize().equals(size)).findFirst();
