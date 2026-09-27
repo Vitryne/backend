@@ -1,6 +1,8 @@
 package com.vitryne.api.controller;
 
-import com.vitryne.api.dto.ProductResponseDTO;
+import com.vitryne.api.dto.ConfigureSaleRequestDTO;
+import com.vitryne.api.dto.ProductClientResponseDTO;
+import com.vitryne.api.dto.ProductManagementResponseDTO;
 import com.vitryne.api.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,18 +20,25 @@ public class ProductController {
     private final ProductService productService;
 
     @GetMapping
-    public ResponseEntity<List<ProductResponseDTO>> listProducts(){
-        log.info("Request received to list all products");
-        List<ProductResponseDTO> products = productService.listProducts();
-        log.info("Returning {} products found", products.size());
+    public ResponseEntity<List<ProductClientResponseDTO>> listProducts(){
+        List<ProductClientResponseDTO> products = productService.listProducts();
         return ResponseEntity.ok(products);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<ProductResponseDTO> findById(@PathVariable Long id){
-        log.info("Request received to find product with ID: {}", id);
-        ProductResponseDTO product = productService.findById(id);
-        log.info("Product with ID: {} returned successfully", id);
+    @GetMapping("/client/{id}")
+    public ResponseEntity<ProductClientResponseDTO> findByIdClient(@PathVariable Long id){
+        ProductClientResponseDTO product = productService.findByIdClient(id);
         return ResponseEntity.ok(product);
     }
+
+    @GetMapping("/manager/{id}")
+    public ResponseEntity<ProductManagementResponseDTO> findByIdManager(@PathVariable Long id){
+        ProductManagementResponseDTO product = productService.findByIdManager(id);
+        return ResponseEntity.ok(product);
+    }
+
+    /*@PutMapping("/manager/{id}"/sale/)
+    public ResponseEntity<ProductManagementResponseDTO> configureSale(@PathVariable Long id, @RequestBody ConfigureSaleRequestDTO request){
+        return ResponseEntity.ok(productService.configureSale(id, request)); falta linkar a um lojista
+    }*/
 }

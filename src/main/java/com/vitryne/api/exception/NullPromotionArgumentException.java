@@ -1,7 +1,7 @@
 package com.vitryne.api.exception;
 
-public class NullPromotionArgument extends RuntimeException {
-    public NullPromotionArgument() {
+public class NullPromotionArgumentException extends RuntimeException {
+    public NullPromotionArgumentException() {
         super("todos argumentos devem ser preenchidos para registrar uma promoção");
     }
 }

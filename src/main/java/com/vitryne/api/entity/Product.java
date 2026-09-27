@@ -1,6 +1,9 @@
 package com.vitryne.api.entity;
 
-import com.vitryne.api.exception.NullPromotionArgument;
+import com.vitryne.api.exception.InvalidEndDateException;
+import com.vitryne.api.exception.InvalidPromotionalPriceException;
+import com.vitryne.api.exception.InvalidStartDateException;
+import com.vitryne.api.exception.NullPromotionArgumentException;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -56,6 +59,9 @@ public class  Product {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "stock_warning_threshold")
+    private Integer stockWarningThreshold;
+
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "photo_urls", columnDefinition = "text[]")
     private List<String> photoUrls;
@@ -69,6 +75,11 @@ public class  Product {
     @OneToOne(mappedBy = "store_id")
     private Store storeId;*/
 
+
+    @PrePersist
+    protected void onCreate(){
+        this.createdAt = LocalDateTime.now();
+    }
 
     public BigDecimal calculateFinalPrice(){
 
@@ -85,19 +96,29 @@ public class  Product {
 
     public void configureSale(BigDecimal promoPrice, LocalDateTime startDate, LocalDateTime endDate){
         if(startDate != null && endDate != null && promoPrice != null){
-            if(&& promoPrice.compareTo(price) < 0){
+
+            if(startDate.isAfter(endDate)){
+                throw new InvalidStartDateException();
+            }
+
+            if(endDate.isBefore(LocalDateTime.now())){
+                throw new InvalidEndDateException();
+            }
+
+            if(promoPrice.compareTo(price) >= 0){
+                throw new InvalidPromotionalPriceException();
+            }
                 this.promotionalStartDate = startDate;
                 this.promotionalEndDate = endDate;
                 this.promotionalPrice = promoPrice;
-            }
         }else{
-            throw new NullPromotionArgument();
+            throw new NullPromotionArgumentException();
         }
     }
 
     public boolean isItInSale(){
         if(promotionalStartDate != null && promotionalEndDate != null && promotionalPrice != null) {
-            return !promotionalStartDate.isAfter(promotionalEndDate) && !LocalDateTime.now().isAfter(promotionalStartDate) && !LocalDateTime.now().isAfter(promotionalEndDate);
+            return !promotionalStartDate.isAfter(promotionalEndDate) && !LocalDateTime.now().isBefore(promotionalStartDate) && !LocalDateTime.now().isAfter(promotionalEndDate);
         } else{
             return false;
         }
@@ -107,6 +128,10 @@ public class  Product {
         return findStockBySize(size).map(Stock::isAvailable).orElse(false);
     }
 
+
+    public Boolean checkAvailability(){
+        return stocks.stream().anyMatch(Stock::isAvailable);
+    }
 
     private java.util.Optional<Stock> findStockBySize(String size){
         return stocks.stream().filter(s -> s.getSize().equals(size)).findFirst();

@@ -22,4 +22,12 @@ public class GlobalExceptionHandler {
                         "message", ex.getMessage()
                 ));
     }
+
+    @ExceptionHandler({InvalidStartDateException.class, InvalidEndDateException.class,
+            InvalidPromotionalPriceException.class, NullPromotionArgumentException.class})
+    public ResponseEntity<Map<String, Object>> handleInvalidPromotion(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "timestamp", Instant.now(), "status", 400, "error", "Bad Request", "message", ex.getMessage()
+        ));
+    }
 }
