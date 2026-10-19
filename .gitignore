@@ -26,3 +26,11 @@ replay_pid*
 .env
 
 .DS_Store
+
+# Build do Maven
+target/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
