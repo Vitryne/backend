@@ -11,8 +11,8 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(ProdutoNaoEncontradoException.class)
-    public ResponseEntity<Map<String, Object>> handleProdutoNaoEncontrado(ProdutoNaoEncontradoException ex) {
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleProductNotFound(ProductNotFoundException ex) {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(Map.of(
@@ -21,5 +21,13 @@ public class GlobalExceptionHandler {
                         "error", "Not Found",
                         "message", ex.getMessage()
                 ));
+    }
+
+    @ExceptionHandler({InvalidStartDateException.class, InvalidEndDateException.class,
+            InvalidPromotionalPriceException.class, NullPromotionArgumentException.class})
+    public ResponseEntity<Map<String, Object>> handleInvalidPromotion(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                "timestamp", Instant.now(), "status", 400, "error", "Bad Request", "message", ex.getMessage()
+        ));
     }
 }
