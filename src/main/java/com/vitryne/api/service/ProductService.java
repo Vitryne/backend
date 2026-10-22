@@ -11,8 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -20,6 +18,7 @@ import java.util.List;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final StoreRepository storeRepository;
 
     @Transactional(readOnly = true)
     public List<ProductClientResponseDTO> listProducts(){
@@ -33,11 +32,13 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public ProductManagementResponseDTO findByIdManager(Long id){
-        Product product = findProduct(id);
+    public ProductManagementResponseDTO findByIdManager(
+            Long id,
+            Long ownerId
+    ) {
+        Product product = findManagedProduct(id, ownerId);
         return toManagementResponseDTO(product);
     }
-
     private ProductClientResponseDTO toClientResponseDTO(Product product){
 
         return  ProductClientResponseDTO.builder().id(product.getId()).rating(product.getRating()).color(product.getColor()).price(product.getPrice()).name(product.getName())
@@ -59,20 +60,29 @@ public class ProductService {
     }
 
     @Transactional
-    public ProductManagementResponseDTO configureSale(Long id, ConfigureSaleRequestDTO requestDTO){
-        Product product = findProduct(id);
-        product.configureSale(requestDTO.promoPrice(), requestDTO.startDate(), requestDTO.endDate());
+    public ProductManagementResponseDTO configureSale(
+            Long id,
+            Long ownerId,
+            ConfigureSaleRequestDTO requestDTO
+    ) {
+        Product product = findManagedProduct(id, ownerId);
+
+        product.configureSale(
+                requestDTO.promoPrice(),
+                requestDTO.startDate(),
+                requestDTO.endDate()
+        );
 
         return toManagementResponseDTO(product);
     }
 
-    private List<AvailableSizeDTO> findSizes(Product product){
+    private List<AvailableSizeDTO> findSizes(Product product) {
         return product.getStocks().stream()
                 .map(stock -> new AvailableSizeDTO(
                         stock.getId(),
                         stock.getSize(),
                         stock.getQuantity(),
-                        product.checkAvailability(stock.getSize())
+                        stock.isAvailable()
                 ))
                 .toList();
     }
@@ -80,6 +90,24 @@ public class ProductService {
     private Product findProduct(Long id){
         return productRepository.findById(id).orElseThrow(() -> new ProductNotFoundException(id));
     }
+
+    private Product findManagedProduct(Long productId, Long ownerId) {
+        return productRepository
+                .findByIdAndStoreOwnerId(productId, ownerId)
+                .orElseThrow(() -> new ProductNotFoundException(productId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductManagementResponseDTO> listManagedProducts(
+            Long ownerId
+    ) {
+        return productRepository.findAllByStoreOwnerId(ownerId)
+                .stream()
+                .map(this::toManagementResponseDTO)
+                .toList();
+    }
+
+
 
     // Manipulation methods to be implemented once the Store entity is modeled
 }

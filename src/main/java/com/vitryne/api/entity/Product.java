@@ -11,6 +11,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Builder
@@ -66,15 +67,21 @@ public class  Product {
     @Column(name = "photo_urls", columnDefinition = "text[]")
     private List<String> photoUrls;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Stock> stocks;
+    @Builder.Default
+    @Setter(AccessLevel.NONE)
+    @OneToMany(
+            mappedBy = "product",
+            cascade = {CascadeType.PERSIST, CascadeType.MERGE}
+    )
+    private List<Stock> stocks = new ArrayList<>();
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "store_id", nullable = false)
+    private Store store;
 
     /*@OneToMany(mappedBy = "produto")
     private List<Review> reviews;
-
-    @OneToOne(mappedBy = "store_id")
-    private Store storeId;*/
-
+    */
 
     @PrePersist
     protected void onCreate(){
@@ -90,10 +97,10 @@ public class  Product {
         return price;
     }
 
-    public boolean isNew(){
-        return createdAt.isAfter(LocalDateTime.now().minusDays(7));
+    public boolean isNew() {
+        return createdAt != null
+                && createdAt.isAfter(LocalDateTime.now().minusDays(7));
     }
-
     public void configureSale(BigDecimal promoPrice, LocalDateTime startDate, LocalDateTime endDate){
         if(startDate != null && endDate != null && promoPrice != null){
 
@@ -105,7 +112,7 @@ public class  Product {
                 throw new InvalidEndDateException();
             }
 
-            if(promoPrice.compareTo(price) >= 0){
+            if (promoPrice.signum() <= 0 || promoPrice.compareTo(price) >= 0) {
                 throw new InvalidPromotionalPriceException();
             }
                 this.promotionalStartDate = startDate;
@@ -135,6 +142,23 @@ public class  Product {
 
     private java.util.Optional<Stock> findStockBySize(String size){
         return stocks.stream().filter(s -> s.getSize().equals(size)).findFirst();
+    }
+
+    public void addStock(String size, Integer quantity) {
+        Stock stock = new Stock(this, size, quantity);
+
+        boolean alreadyExists = stocks.stream()
+                .anyMatch(existing ->
+                        existing.getSize().equals(stock.getSize())
+                );
+
+        if (alreadyExists) {
+            throw new IllegalArgumentException(
+                    "Stock already exists for size: " + stock.getSize()
+            );
+        }
+
+        stocks.add(stock);
     }
 
 }
