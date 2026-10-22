@@ -51,7 +51,7 @@ public class CartService {
             throw new UnavailableQuantityException(
                     stock.getSize(), stock.getQuantity(), finalQuantity);
         }
-        Double unitPrice = stock.getProduct().calculateFinalPrice();
+        Double unitPrice = stock.getProduct().calculateFinalPrice().doubleValue();
         if (existingItem != null) {
             existingItem.setQuantity(finalQuantity);
             existingItem.setUnitPrice(unitPrice);
