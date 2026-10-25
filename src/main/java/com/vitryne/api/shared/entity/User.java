@@ -1,6 +1,5 @@
 package com.vitryne.api.shared.entity;
 
-
 import com.vitryne.api.shared.enums.UserRole;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -20,7 +19,7 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "username", nullable = false, length = 50)
+    @Column(name = "username", length = 50)
     private String username;
 
     @Column(name = "email", nullable = false, length = 255)
@@ -39,16 +38,7 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public User(
-            String name,
-            String email,
-            String passwordHash,
-            UserRole role
-    ) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("Name is required");
-        }
-
+    public User(String email, String passwordHash, UserRole role) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("Email is required");
         }
@@ -61,7 +51,6 @@ public class User {
             throw new IllegalArgumentException("Role is required");
         }
 
-        this.username = name.trim();
         this.email = email.trim().toLowerCase(Locale.ROOT);
         this.passwordHash = passwordHash;
         this.role = role;

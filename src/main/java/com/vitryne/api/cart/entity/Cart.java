@@ -1,8 +1,12 @@
 package com.vitryne.api.cart.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +27,10 @@ public class Cart {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @PositiveOrZero
+    @Digits(integer = 10, fraction = 2)
     @Column(name = "total_value_forecast")
-    private Double totalValueForecast;
+    private BigDecimal totalValueForecast;
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
