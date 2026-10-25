@@ -7,11 +7,14 @@ import com.vitryne.api.shared.exception.InvalidStartDateException;
 import com.vitryne.api.shared.exception.NullPromotionArgumentException;
 import com.vitryne.api.store.entity.Store;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,9 +38,13 @@ public class  Product {
     @Column(name = "description")
     private String description;
 
+    @Positive
+    @Digits(integer = 10, fraction = 2)
     @Column(name = "price")
     private BigDecimal price;
 
+    @Positive
+    @Digits(integer = 10, fraction = 2)
     @Column(name = "promotional_price")
     private BigDecimal promotionalPrice;
 
@@ -119,7 +126,7 @@ public class  Product {
             }
                 this.promotionalStartDate = startDate;
                 this.promotionalEndDate = endDate;
-                this.promotionalPrice = promoPrice;
+                this.promotionalPrice = promoPrice.setScale(2, RoundingMode.UNNECESSARY);
         }else{
             throw new NullPromotionArgumentException();
         }

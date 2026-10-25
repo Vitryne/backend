@@ -2,6 +2,8 @@ package com.vitryne.api.cart.dto;
 
 import lombok.Builder;
 
+import java.math.BigDecimal;
+
 @Builder
 public record CartItemResponseDTO(
         Long id,
@@ -11,6 +13,6 @@ public record CartItemResponseDTO(
         String photoUrl,
         String size,
         Integer quantity,
-        Double unitPrice,
-        Double subtotal
+        BigDecimal unitPrice,
+        BigDecimal subtotal
 ) {}

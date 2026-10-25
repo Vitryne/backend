@@ -1,7 +1,11 @@
 package com.vitryne.api.cart.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
+
+import java.math.BigDecimal;
 
 @Builder
 @AllArgsConstructor
@@ -26,6 +30,8 @@ public class CartItem {
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
 
+    @Positive
+    @Digits(integer = 10, fraction = 2)
     @Column(name = "unit_price", nullable = false)
-    private Double unitPrice;
+    private BigDecimal unitPrice;
 }

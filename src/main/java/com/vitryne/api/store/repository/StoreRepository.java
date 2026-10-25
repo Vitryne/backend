@@ -10,4 +10,6 @@ public interface StoreRepository extends JpaRepository<Store, Long> {
     Optional<Store> findByOwnerId(Long ownerId);
 
     boolean existsByOwnerId(Long ownerId);
+
+    boolean existsByCnpj(String cnpj);
 }

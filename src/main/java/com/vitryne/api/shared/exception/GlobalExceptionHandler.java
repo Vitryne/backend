@@ -4,6 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.Map;
@@ -29,5 +30,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "timestamp", Instant.now(), "status", 400, "error", "Bad Request", "message", ex.getMessage()
         ));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleStatus(
+            ResponseStatusException exception
+    ) {
+        String message = exception.getReason() == null
+                ? "Não foi possível processar o cadastro"
+                : exception.getReason();
+
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(Map.of("message", message));
     }
 }

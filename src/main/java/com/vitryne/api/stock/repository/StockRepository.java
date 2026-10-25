@@ -13,5 +13,4 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
             Long ownerId
     );
 
-    Optional<Store> findByOwnerId(Long ownerId);
 }

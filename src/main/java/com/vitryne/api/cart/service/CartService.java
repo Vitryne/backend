@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +52,7 @@ public class CartService {
             throw new UnavailableQuantityException(
                     stock.getSize(), stock.getQuantity(), finalQuantity);
         }
-        Double unitPrice = stock.getProduct().calculateFinalPrice();
+        BigDecimal unitPrice = stock.getProduct().calculateFinalPrice();
         if (existingItem != null) {
             existingItem.setQuantity(finalQuantity);
             existingItem.setUnitPrice(unitPrice);
@@ -119,17 +120,17 @@ public class CartService {
 
     }
 
-    private Double calculateTotal(Cart cart) {
+    private BigDecimal calculateTotal(Cart cart) {
         return cart.getItems().stream()
-                .mapToDouble(this::calculateSubtotal)
-                .sum();
+                .map(this::calculateSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    private Double calculateSubtotal(CartItem item) {
+    private BigDecimal calculateSubtotal(CartItem item) {
         if (item.getUnitPrice() == null || item.getQuantity() == null) {
-            return 0.0;
+            return BigDecimal.ZERO;
         }
-        return item.getUnitPrice() * item.getQuantity();
+        return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
     }
 
     private Cart getOrCreate(Long userId) {
@@ -139,7 +140,7 @@ public class CartService {
                     log.info("No cart exists for user: [{}], creating a new one.", userId);
                     Cart cart = Cart.builder()
                             .userId(userId)
-                            .totalValueForecast(0.0)
+                            .totalValueForecast(BigDecimal.ZERO)   // era 0.0
                             .updatedAt(LocalDateTime.now())
                             .build();
                     Cart savedCart = cartRepository.save(cart);
