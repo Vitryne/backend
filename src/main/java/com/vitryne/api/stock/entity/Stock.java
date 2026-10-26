@@ -19,7 +19,7 @@ public class Stock {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "size", nullable = false)
+    @Column(name = "size", nullable = false, length = 10)
     private String size;
 
     @Column(name = "quantity", nullable = false)
@@ -43,8 +43,16 @@ public class Stock {
 
         validateQuantity(quantity);
 
+        String normalizedSize = size.trim().toUpperCase(Locale.ROOT);
+
+        if (normalizedSize.length() > 10) {
+            throw new IllegalArgumentException(
+                    "Size must have at most 10 characters"
+            );
+        }
+
+        this.size = normalizedSize;
         this.product = product;
-        this.size = size.trim().toUpperCase(Locale.ROOT);
         this.quantity = quantity;
     }
 
