@@ -27,6 +27,7 @@ public record ProductManagementResponseDTO (
         Instant promotionalStartDate,
         Instant promotionalEndDate,
         Integer stockWarningThreshold,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ){
 }

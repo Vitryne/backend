@@ -1,12 +1,11 @@
 package com.vitryne.api.product.entity;
 
+import com.vitryne.api.product.enums.ProductStatus;
 import com.vitryne.api.shared.exception.*;
 import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.store.entity.Store;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Digits;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -63,8 +62,12 @@ public class  Product {
     @Column(name = "promotional_end_date")
     private Instant promotionalEndDate;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
 
     @Column(name = "stock_warning_threshold")
     private Integer stockWarningThreshold;
@@ -183,8 +186,16 @@ public class  Product {
     }
     @PrePersist
     protected void onCreate(){
-        this.createdAt = Instant.now();
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
+
+    @PreUpdate
+    protected void onUpdate(){
+        this.updatedAt = Instant.now();
+    }
+
 
     public BigDecimal calculateFinalPrice(){
 
@@ -246,6 +257,114 @@ public class  Product {
         return findStockBySize(size).map(Stock::isAvailable).orElse(false);
     }
 
+    public void updateDetails(
+            String name,
+            String description,
+            BigDecimal price,
+            String type,
+            String color,
+            Integer stockWarningThreshold,
+            List<String> photoUrls){
+        if (name == null || name.isBlank()) {
+            throw new InvalidInputException(
+                    "O nome do produto é obrigatório"
+            );
+        }
+
+        if (description == null || description.isBlank()) {
+            throw new InvalidInputException(
+                    "A descrição do produto é obrigatória"
+            );
+        }
+
+        if (price == null || price.signum() <= 0) {
+            throw new InvalidInputException(
+                    "O preço do produto deve ser maior que zero"
+            );
+        }
+
+        BigDecimal normalizedPrice;
+
+        try {
+            normalizedPrice = price.setScale(
+                    2, RoundingMode.UNNECESSARY
+            );
+        } catch (ArithmeticException exception) {
+            throw new InvalidInputException(
+                    "O preço deve ter no máximo duas casas decimais"
+            );
+        }
+
+        if (normalizedPrice.precision() > 12) {
+            throw new InvalidInputException(
+                    "O preço deve ter no máximo dez dígitos inteiros"
+            );
+        }
+
+        if (type == null || type.isBlank()) {
+            throw new InvalidInputException(
+                    "O tipo do produto é obrigatório"
+            );
+        }
+
+        if (stockWarningThreshold != null && stockWarningThreshold < 0) {
+            throw new InvalidInputException(
+                    "O limite de alerta de estoque não pode ser negativo"
+            );
+        }
+
+        if (photoUrls == null || photoUrls.isEmpty()) {
+            throw new InvalidInputException(
+                    "A lista de imagens do produto é obrigatória"
+            );
+        }
+
+        if (photoUrls.stream().anyMatch(
+                url -> url == null || url.isBlank()
+        )) {
+            throw new InvalidInputException(
+                    "As imagens não podem ter URLs vazias"
+            );
+        }
+
+        if(color == null || color.isBlank()){
+            throw new InvalidInputException(
+                    "A cor do produto não pode ser nula"
+            );
+        }
+
+        Instant now = Instant.now();
+
+        boolean hasUnexpiredSale = promotionalPrice != null
+                        && promotionalStartDate != null
+                        && promotionalEndDate != null
+                        && !promotionalEndDate.isBefore(now);
+
+        if(hasUnexpiredSale && normalizedPrice.compareTo(promotionalPrice) <= 0){
+            throw new InvalidInputException(
+                    "O preço normal deve ser maior que o preço promocional. "
+                            + "Ajuste ou remova a promoção antes."
+            );
+        }
+
+        this.name = name.trim();
+        this.description = description.trim();
+        this.price = normalizedPrice;
+        this.type = type.trim();
+        this.color = color;
+        this.stockWarningThreshold = stockWarningThreshold;
+        this.photoUrls = new ArrayList<>(photoUrls);
+    }
+
+    public void changeStatus(ProductStatus status){
+        if(status == null){
+            throw new InvalidInputException(
+                    "O status do produto é obrigatório"
+            );
+        }
+
+        this.status = status.name();
+    }
 
     public Boolean checkAvailability(){
         return stocks.stream().anyMatch(Stock::isAvailable);
