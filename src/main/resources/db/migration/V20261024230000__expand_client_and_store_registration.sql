@@ -5,7 +5,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower
     ON users (LOWER(email));
 
 
-CREATE TABLE client (
+CREATE TABLE IF NOT EXISTS client (
                         id              BIGSERIAL PRIMARY KEY,
                         user_id         BIGINT NOT NULL,
                         name            VARCHAR(150) NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE client (
 );
 
 
-CREATE TABLE store_bank_account (
+CREATE TABLE IF NOT EXISTS store_bank_account (
                                     id                BIGSERIAL PRIMARY KEY,
                                     holder_name       VARCHAR(150) NOT NULL,
                                     holder_document   VARCHAR(14) NOT NULL,
@@ -81,7 +81,7 @@ ALTER TABLE store
         CHECK (preparation_time_minutes BETWEEN 1 AND 1440);
 
 
-CREATE TABLE store_tag (
+CREATE TABLE IF NOT EXISTS store_tag (
                            store_id BIGINT NOT NULL,
                            tag      VARCHAR(50) NOT NULL,
 
@@ -92,7 +92,7 @@ CREATE TABLE store_tag (
 );
 
 
-CREATE TABLE store_opening_period (
+CREATE TABLE IF NOT EXISTS store_opening_period (
                                       store_id     BIGINT NOT NULL,
                                       day_of_week  VARCHAR(9) NOT NULL,
                                       opens_at     TIME NOT NULL,
