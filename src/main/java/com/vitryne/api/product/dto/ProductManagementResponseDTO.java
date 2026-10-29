@@ -1,6 +1,7 @@
 package com.vitryne.api.product.dto;
 
 import com.vitryne.api.shared.dto.AvailableSizeDTO;
+import com.vitryne.api.stock.dto.StockManagementResponseDTO;
 import lombok.Builder;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ public record ProductManagementResponseDTO (
         Instant promotionalEndDate,
         Integer stockWarningThreshold,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        List<StockManagementResponseDTO> stocks
 ){
 }

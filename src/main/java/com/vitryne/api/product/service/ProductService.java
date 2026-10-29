@@ -7,6 +7,7 @@ import com.vitryne.api.product.entity.Product;
 import com.vitryne.api.shared.exception.NoProductsInThatStoreException;
 import com.vitryne.api.shared.exception.ProductNotFoundException;
 import com.vitryne.api.product.repository.ProductRepository;
+import com.vitryne.api.stock.dto.StockManagementResponseDTO;
 import com.vitryne.api.store.entity.Store;
 import com.vitryne.api.store.exception.StoreNotFoundException;
 import com.vitryne.api.store.repository.StoreRepository;
@@ -111,7 +112,8 @@ public class ProductService {
                 .finalPrice(product.calculateFinalPrice()).status(product.getStatus()).photoUrls(product.getPhotoUrls()).availableSizes(findSizes(product))
                 .availableProduct(product.checkAvailability()).newProduct(product.isNew()).onSale(product.isItInSale())
                 .promotionalStartDate(product.getPromotionalStartDate()).promotionalEndDate(product.getPromotionalEndDate())
-                .stockWarningThreshold(product.getStockWarningThreshold()).createdAt(product.getCreatedAt()).updatedAt(product.getUpdatedAt())
+                .stockWarningThreshold(product.getStockWarningThreshold()).createdAt(product.getCreatedAt())
+                .updatedAt(product.getUpdatedAt()).stocks(findManagedStocks(product))
                 .build();
     }
 
@@ -129,6 +131,22 @@ public class ProductService {
                 .build();
     }
 
+    private List<StockManagementResponseDTO> findManagedStocks(
+            Product product
+    ) {
+        return product.getStocks().stream()
+                .map(stock -> new StockManagementResponseDTO(
+                        stock.getId(),
+                        product.getId(),
+                        stock.getSize(),
+                        stock.getQuantity(),
+                        stock.isAvailable(),
+                        stock.getVersion(),
+                        stock.getCreatedAt(),
+                        stock.getUpdatedAt()
+                ))
+                .toList();
+    }
 
     @Transactional
     public ProductManagementResponseDTO configureSale(

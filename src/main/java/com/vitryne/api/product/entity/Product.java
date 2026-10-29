@@ -374,7 +374,7 @@ public class  Product {
         return stocks.stream().filter(s -> s.getSize().equals(size)).findFirst();
     }
 
-    public void addStock(String size, Integer quantity) {
+    public Stock addStock(String size, Integer quantity) {
         Stock stock = new Stock(this, size, quantity);
 
         boolean alreadyExists = stocks.stream()
@@ -384,11 +384,13 @@ public class  Product {
 
         if (alreadyExists) {
             throw new IllegalArgumentException(
-                    "Stock already exists for size: " + stock.getSize()
+                    "Já existe estoque para o tamanho: " + stock.getSize()
             );
         }
 
         stocks.add(stock);
+
+        return stock;
     }
 
 }
