@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS client (
                         user_id         BIGINT NOT NULL,
                         name            VARCHAR(150) NOT NULL,
                         cpf             VARCHAR(11) NOT NULL,
-
                         zip_code        VARCHAR(8) NOT NULL,
                         street          VARCHAR(200) NOT NULL,
                         address_number  VARCHAR(20) NOT NULL,
@@ -18,10 +17,8 @@ CREATE TABLE IF NOT EXISTS client (
                         complement      VARCHAR(150),
                         city            VARCHAR(100) NOT NULL,
                         state           VARCHAR(2) NOT NULL,
-
                         CONSTRAINT uq_client_user UNIQUE (user_id),
                         CONSTRAINT uq_client_cpf UNIQUE (cpf),
-
                         CONSTRAINT fk_client_user
                             FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -49,7 +46,6 @@ ALTER TABLE store
     ADD COLUMN cnpj VARCHAR(14),
     ADD COLUMN phone VARCHAR(25),
     ADD COLUMN legal_name VARCHAR(255),
-
     ADD COLUMN zip_code VARCHAR(8),
     ADD COLUMN street VARCHAR(200),
     ADD COLUMN address_number VARCHAR(20),
@@ -57,7 +53,6 @@ ALTER TABLE store
     ADD COLUMN complement VARCHAR(150),
     ADD COLUMN city VARCHAR(100),
     ADD COLUMN state VARCHAR(2),
-
     ADD COLUMN bank_account_id BIGINT,
     ADD COLUMN main_category VARCHAR(100),
     ADD COLUMN delivery_radius_km NUMERIC(6,2),
