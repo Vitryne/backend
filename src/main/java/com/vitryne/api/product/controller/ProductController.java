@@ -3,6 +3,7 @@ package com.vitryne.api.product.controller;
 import com.vitryne.api.product.dto.ProductClientResponseDTO;
 import com.vitryne.api.product.dto.ProductManagementResponseDTO;
 import com.vitryne.api.product.service.ProductService;
+import com.vitryne.api.shared.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -61,12 +63,11 @@ public class ProductController {
     public ResponseEntity<ProductManagementResponseDTO> findByIdManager(
             @Parameter(description = "ID do produto", example = "1")
             @PathVariable Long id,
-
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId
+            @AuthenticationPrincipal Jwt jwt
     ) {
         return ResponseEntity.ok(
-                productService.findByIdManager(id, ownerId)
+                productService.findByIdManager(id, AuthenticatedUser.id(jwt))
         );
     }
     /*@PutMapping("/manager/{id}"/sale/)
