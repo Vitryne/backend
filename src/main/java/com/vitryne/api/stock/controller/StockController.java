@@ -7,6 +7,7 @@ import com.vitryne.api.stock.dto.StockManagementResponseDTO;
 import com.vitryne.api.stock.service.StockService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/product/manager/{productId}/stocks")
 @PreAuthorize("hasRole('STORE')")
+@SecurityRequirement(name = "bearerAuth")
 @Tag(
         name = "Gestão de estoque",
         description = "Gestão dos tamanhos e quantidades da própria loja"

@@ -19,6 +19,7 @@ import com.vitryne.api.stock.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -38,12 +39,21 @@ public class CartService {
 
     @Transactional(readOnly = true)
     public CartResponseDTO searchByUser(Long userId) {
-        return toResponseDTO(searchCartByUserId(userId));
+        return toResponseDTO(getOrCreate(userId));
     }
 
-    @Transactional
+    private void lockCustomerCart(Long userId) {
+        cartRepository.lockUserForCartMutation(userId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED,
+                        "Usuário autenticado não encontrado"
+                ));
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponseDTO addItem(Long userId, AddItemRequestDTO request) {
         validateQuantity(request.quantity());
+        lockCustomerCart(userId);
 
         Stock stock = findStockById(request.stockId());
         validatePurchasable(stock);
@@ -89,13 +99,14 @@ public class CartService {
         return persist(cart);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponseDTO updateItemQuantity(
             Long userId,
             Long itemId,
             UpdateItemRequestDTO request
     ) {
         validateQuantity(request.quantity());
+        lockCustomerCart(userId);
 
         Cart cart = searchCartByUserId(userId);
         CartItem item = findItemById(cart, itemId);
@@ -110,8 +121,9 @@ public class CartService {
         return persist(cart);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponseDTO removeItem(Long userId, Long itemId) {
+        lockCustomerCart(userId);
         Cart cart = searchCartByUserId(userId);
         CartItem item = findItemById(cart, itemId);
 
@@ -120,11 +132,16 @@ public class CartService {
         return persist(cart);
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public CartResponseDTO clear(Long userId) {
-        Cart cart = searchCartByUserId(userId);
-        cart.getItems().clear();
+        lockCustomerCart(userId);
 
+        Cart cart = getOrCreate(userId);
+        if (cart.getItems().isEmpty()) {
+            return toResponseDTO(cart);
+        }
+
+        cart.getItems().clear();
         return persist(cart);
     }
 

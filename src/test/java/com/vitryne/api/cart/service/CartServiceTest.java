@@ -9,7 +9,6 @@ import com.vitryne.api.cart.entity.CartItem;
 import com.vitryne.api.cart.repository.CartRepository;
 import com.vitryne.api.product.entity.Product;
 import com.vitryne.api.shared.exception.CartItemNotFoundException;
-import com.vitryne.api.shared.exception.CartNotFoundException;
 import com.vitryne.api.shared.exception.InvalidQuantityException;
 import com.vitryne.api.shared.exception.StockNotFoundException;
 import com.vitryne.api.shared.exception.StockUnavailableException;
@@ -59,6 +58,7 @@ class CartServiceTest {
 
     @Test
     void primeiroItemDeveCriarCarrinhoDoUsuarioComAVariacaoSelecionada() {
+        simularBloqueioDoCliente();
         Product product = product(1L, 50L, "19.90", "ACTIVE");
         Stock stock = stock(STOCK_P, product, "P", 8);
 
@@ -95,6 +95,7 @@ class CartServiceTest {
 
     @Test
     void mesmaVariacaoDeveSomarNaMesmaLinhaEOutroTamanhoDeveCriarOutraLinha() {
+        simularBloqueioDoCliente();
         Product product = product(1L, 50L, "19.90", "ACTIVE");
         Stock p = stock(STOCK_P, product, "P", 5);
         Stock m = stock(STOCK_M, product, "M", 5);
@@ -129,6 +130,7 @@ class CartServiceTest {
 
     @Test
     void deveValidarQuantidadeAcumuladaAoAdicionarMesmaVariacao() {
+        simularBloqueioDoCliente();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 3);
         Cart cart = carrinho();
         CartItem item = incluirLinha(cart, ITEM_ID, stock, 2);
@@ -147,6 +149,7 @@ class CartServiceTest {
 
     @Test
     void putDeveSubstituirQuantidadeEAplicarPrecoVigente() {
+        simularBloqueioDoCliente();
         Product product = product(1L, 50L, "25.00", "ACTIVE");
         Stock stock = stock(STOCK_P, product, "P", 10);
         Cart cart = carrinho();
@@ -176,6 +179,7 @@ class CartServiceTest {
 
     @Test
     void putAcimaDoEstoqueDevePreservarQuantidadeAnterior() {
+        simularBloqueioDoCliente();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 3);
         Cart cart = carrinho();
         CartItem item = incluirLinha(cart, ITEM_ID, stock, 2);
@@ -206,17 +210,20 @@ class CartServiceTest {
 
     @Test
     void naoDeveAdicionarVariacaoInexistente() {
+        simularBloqueioDoCliente();
         when(stockRepository.findById(STOCK_P)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                 service.addItem(USER_ID, new AddItemRequestDTO(STOCK_P, 1))
         ).isInstanceOf(StockNotFoundException.class);
 
-        verifyNoInteractions(cartRepository);
+        verify(cartRepository).lockUserForCartMutation(USER_ID);
+        verifyNoMoreInteractions(cartRepository);
     }
 
     @Test
     void naoDeveAdicionarVariacaoEsgotada() {
+        simularBloqueioDoCliente();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 0);
         stockEncontrado(stock);
 
@@ -224,11 +231,13 @@ class CartServiceTest {
                 service.addItem(USER_ID, new AddItemRequestDTO(STOCK_P, 1))
         ).isInstanceOf(StockUnavailableException.class);
 
-        verifyNoInteractions(cartRepository);
+        verify(cartRepository).lockUserForCartMutation(USER_ID);
+        verifyNoMoreInteractions(cartRepository);
     }
 
     @Test
     void naoDeveAdicionarProdutoInativoMesmoComEstoque() {
+        simularBloqueioDoCliente();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "INACTIVE"), "P", 5);
         stockEncontrado(stock);
 
@@ -238,11 +247,13 @@ class CartServiceTest {
                 assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT)
         );
 
-        verifyNoInteractions(cartRepository);
+        verify(cartRepository).lockUserForCartMutation(USER_ID);
+        verifyNoMoreInteractions(cartRepository);
     }
 
     @Test
     void naoDeveMisturarLojasNoMesmoCarrinho() {
+        simularBloqueioDoCliente();
         Stock primeiraLoja = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 5);
         Stock outraLoja = stock(STOCK_M, product(2L, 60L, "30.00", "ACTIVE"), "M", 5);
 
@@ -289,15 +300,23 @@ class CartServiceTest {
     }
 
     @Test
-    void consultaSemCarrinhoDeveManterContratoAtual() {
+    void primeiroAcessoDeveRetornarCarrinhoVazioSemPersistir() {
         when(cartRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.searchByUser(USER_ID))
-                .isInstanceOf(CartNotFoundException.class);
+        CartResponseDTO response = service.searchByUser(USER_ID);
+
+        assertThat(response.id()).isNull();
+        assertThat(response.userId()).isEqualTo(USER_ID);
+        assertThat(response.updatedAt()).isNull();
+        assertThat(response.items()).isEmpty();
+        assertThat(response.totalValueForecast()).isEqualByComparingTo("0.00");
+        verify(cartRepository).findByUserId(USER_ID);
+        verifyNoMoreInteractions(cartRepository);
     }
 
     @Test
     void removerItemDevePreservarOutroTamanhoERecalcularTotal() {
+        simularBloqueioDoCliente();
         Product product = product(1L, 50L, "19.90", "ACTIVE");
         Stock p = stock(STOCK_P, product, "P", 5);
         Stock m = stock(STOCK_M, product, "M", 7);
@@ -321,6 +340,7 @@ class CartServiceTest {
 
     @Test
     void naoDeveAlterarNemRemoverItemQueNaoEstaNoCarrinhoDoUsuario() {
+        simularBloqueioDoCliente();
         Cart cart = carrinho();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 5);
         CartItem original = incluirLinha(cart, ITEM_ID, stock, 1);
@@ -342,6 +362,7 @@ class CartServiceTest {
 
     @Test
     void limparDeveManterCarrinhoEZerarTotalSemAlterarEstoque() {
+        simularBloqueioDoCliente();
         Stock stock = stock(STOCK_P, product(1L, 50L, "19.90", "ACTIVE"), "P", 5);
         Cart cart = carrinho();
         incluirLinha(cart, ITEM_ID, stock, 2);
@@ -360,6 +381,36 @@ class CartServiceTest {
         verifyNoInteractions(stockRepository);
     }
 
+
+    @Test
+    void limparSemCarrinhoNaoDeveCriarRegistro() {
+        simularBloqueioDoCliente();
+        when(cartRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+
+        CartResponseDTO response = service.clear(USER_ID);
+
+        assertThat(response.id()).isNull();
+        assertThat(response.items()).isEmpty();
+        assertThat(response.totalValueForecast()).isEqualByComparingTo("0.00");
+        verify(cartRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void usuarioInexistenteDeveInterromperAdicaoAntesDeConsultarEstoque() {
+        when(cartRepository.lockUserForCartMutation(USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.addItem(USER_ID, new AddItemRequestDTO(STOCK_P, 1)))
+                .isInstanceOfSatisfying(ResponseStatusException.class, ex ->
+                        assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verifyNoInteractions(stockRepository);
+        verify(cartRepository).lockUserForCartMutation(USER_ID);
+        verifyNoMoreInteractions(cartRepository);
+    }
+
+    private void simularBloqueioDoCliente() {
+        when(cartRepository.lockUserForCartMutation(USER_ID)).thenReturn(Optional.of(USER_ID));
+    }
 
     private Cart carrinho() {
         return Cart.builder()
