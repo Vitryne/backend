@@ -1,5 +1,6 @@
 package com.vitryne.api.cart.entity;
 
+import com.vitryne.api.stock.entity.Stock;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Positive;
@@ -24,8 +25,9 @@ public class CartItem {
     @JoinColumn(name = "cart_id", nullable = false)
     private Cart cart;
 
-    @Column(name = "stock_id", nullable = false)
-    private Long stockId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "stock_id", nullable = false)
+    private Stock stock;
 
     @Column(name = "quantity", nullable = false)
     private Integer quantity;
@@ -34,4 +36,8 @@ public class CartItem {
     @Digits(integer = 10, fraction = 2)
     @Column(name = "unit_price", nullable = false)
     private BigDecimal unitPrice;
+
+    public BigDecimal subtotal() {
+        return unitPrice.multiply(BigDecimal.valueOf(quantity));
+    }
 }
