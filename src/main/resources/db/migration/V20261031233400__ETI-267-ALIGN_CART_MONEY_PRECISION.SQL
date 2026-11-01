@@ -1,0 +1,5 @@
+ALTER TABLE cart
+ALTER COLUMN total_value_forecast TYPE NUMERIC(12,2);
+
+ALTER TABLE cart_item
+ALTER COLUMN unit_price TYPE NUMERIC(12,2);

@@ -1,10 +1,11 @@
 package com.vitryne.api.product.dto;
 
 import com.vitryne.api.shared.dto.AvailableSizeDTO;
+import com.vitryne.api.stock.dto.StockManagementResponseDTO;
 import lombok.Builder;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Builder
@@ -24,9 +25,11 @@ public record ProductManagementResponseDTO (
         List<String> photoUrls,
         Boolean availableProduct,
         List<AvailableSizeDTO> availableSizes,
-        LocalDateTime promotionalStartDate,
-        LocalDateTime promotionalEndDate,
+        Instant promotionalStartDate,
+        Instant promotionalEndDate,
         Integer stockWarningThreshold,
-        LocalDateTime createdAt
+        Instant createdAt,
+        Instant updatedAt,
+        List<StockManagementResponseDTO> stocks
 ){
 }

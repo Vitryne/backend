@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.Locale;
 
 @Getter
@@ -19,7 +20,7 @@ public class Stock {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "size", nullable = false)
+    @Column(name = "size", nullable = false, length = 10)
     private String size;
 
     @Column(name = "quantity", nullable = false)
@@ -28,6 +29,24 @@ public class Stock {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     @Version
     private Long version;
@@ -43,8 +62,16 @@ public class Stock {
 
         validateQuantity(quantity);
 
+        String normalizedSize = size.trim().toUpperCase(Locale.ROOT);
+
+        if (normalizedSize.length() > 10) {
+            throw new IllegalArgumentException(
+                    "Size must have at most 10 characters"
+            );
+        }
+
+        this.size = normalizedSize;
         this.product = product;
-        this.size = size.trim().toUpperCase(Locale.ROOT);
         this.quantity = quantity;
     }
 
