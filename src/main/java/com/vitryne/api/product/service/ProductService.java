@@ -228,7 +228,4 @@ public class ProductService {
                 .toList();
     }
 
-
-
-    // Manipulation methods to be implemented once the Store entity is modeled
 }
