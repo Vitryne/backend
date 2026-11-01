@@ -13,7 +13,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.vitryne.api.shared.security.AuthenticatedUser;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
@@ -37,14 +39,14 @@ public class StockController {
             @PathVariable Long productId,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @Valid @RequestBody CreateStockRequestDTO request
     ) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(stockService.addStock(
                         productId,
-                        ownerId,
+                        AuthenticatedUser.id(jwt),
                         request
                 ));
     }
@@ -59,7 +61,7 @@ public class StockController {
             @PathVariable Long stockId,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @Valid @RequestBody ReplenishStockRequestDTO request
     ) {
@@ -67,7 +69,7 @@ public class StockController {
                 stockService.replenishStock(
                         productId,
                         stockId,
-                        ownerId,
+                        AuthenticatedUser.id(jwt),
                         request
                 )
         );
@@ -87,7 +89,7 @@ public class StockController {
             @PathVariable Long stockId,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @Valid @RequestBody AdjustStockRequestDTO request
     ) {
@@ -95,7 +97,7 @@ public class StockController {
                 stockService.adjustStock(
                         productId,
                         stockId,
-                        ownerId,
+                        AuthenticatedUser.id(jwt),
                         request
                 )
         );

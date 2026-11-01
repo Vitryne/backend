@@ -18,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.vitryne.api.shared.security.AuthenticatedUser;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -76,10 +78,10 @@ public class ProductManagementController {
             @PathVariable Long id,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId
+            @AuthenticationPrincipal Jwt jwt
     ) {
         return ResponseEntity.ok(
-                productService.findByIdManager(id, ownerId)
+                productService.findByIdManager(id, AuthenticatedUser.id(jwt))
         );
     }
 
@@ -106,10 +108,10 @@ public class ProductManagementController {
     @GetMapping
     public ResponseEntity<List<ProductManagementResponseDTO>> findByOwner(
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId
+            @AuthenticationPrincipal Jwt jwt
     ) {
         return ResponseEntity.ok(
-                productService.listManagedProducts(ownerId)
+                productService.listManagedProducts(AuthenticatedUser.id(jwt))
         );
     }
 
@@ -155,7 +157,7 @@ public class ProductManagementController {
     @PostMapping
     public ResponseEntity<ProductManagementResponseDTO> createProduct(
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -167,7 +169,7 @@ public class ProductManagementController {
             @Valid @RequestBody CreateProductRequestDTO request
     ) {
         return ResponseEntity.ok(
-                productService.createProduct(request, ownerId)
+                productService.createProduct(request, AuthenticatedUser.id(jwt))
         );
     }
 
@@ -221,7 +223,7 @@ public class ProductManagementController {
             @PathVariable Long id,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -230,7 +232,7 @@ public class ProductManagementController {
             @Valid @RequestBody EditProductRequestDTO request
     ) {
         return ResponseEntity.ok(
-                productService.editProduct(id, ownerId, request)
+                productService.editProduct(id, AuthenticatedUser.id(jwt), request)
         );
     }
 
@@ -279,7 +281,7 @@ public class ProductManagementController {
             @PathVariable Long id,
 
             @Parameter(hidden = true)
-            @AuthenticationPrincipal(expression = "id") Long ownerId,
+            @AuthenticationPrincipal Jwt jwt,
 
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -288,7 +290,7 @@ public class ProductManagementController {
             @Valid @RequestBody StatusRequestDTO request
     ) {
         return ResponseEntity.ok(
-                productService.alterStatus(id, ownerId, request)
+                productService.alterStatus(id, AuthenticatedUser.id(jwt), request)
         );
     }
 }

@@ -3,7 +3,6 @@ package com.vitryne.api.product.controller;
 import com.vitryne.api.product.dto.ProductClientResponseDTO;
 import com.vitryne.api.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -90,16 +89,8 @@ public class ProductController {
             )
     })
     @GetMapping("/client/{id}")
-    public ResponseEntity<ProductClientResponseDTO> findByIdClient(
-            @Parameter(
-                    description = "ID do produto",
-                    example = "1",
-                    required = true
-            )
-            @PathVariable Long id
-    ) {
-        return ResponseEntity.ok(
-                productService.findByIdClient(id)
-        );
+    public ResponseEntity<ProductClientResponseDTO> findByIdClient(@PathVariable Long id){
+        ProductClientResponseDTO product = productService.findByIdClient(id);
+        return ResponseEntity.ok(product);
     }
 }

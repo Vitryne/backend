@@ -54,6 +54,10 @@ class ProductServiceTest {
                 .thenAnswer(invocation -> {
                     Product product = invocation.getArgument(0);
                     ReflectionTestUtils.setField(product, "id", PRODUCT_ID);
+                    long stockId = 1L;
+                    for (Stock stock : product.getStocks()) {
+                        ReflectionTestUtils.setField(stock, "id", stockId++);
+                    }
                     return product;
                 });
 
