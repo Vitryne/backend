@@ -10,6 +10,7 @@ public record CreateProductRequestDTO(
         @NotBlank
         String name,
 
+        @NotBlank
         String description,
 
         @NotNull
@@ -20,12 +21,15 @@ public record CreateProductRequestDTO(
         @NotBlank
         String type,
 
-        @NotBlank
         String color,
+
+        @PositiveOrZero
+        Integer stockWarningThreshold,
 
         @NotEmpty
         List<@NotBlank String> photoUrls,
 
         @NotEmpty
         List<@NotNull @Valid CreateStockRequestDTO> stocks
-) {}
+) {
+}

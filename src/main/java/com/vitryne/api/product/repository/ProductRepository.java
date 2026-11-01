@@ -1,6 +1,7 @@
 package com.vitryne.api.product.repository;
 
 import com.vitryne.api.product.entity.Product;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -16,4 +17,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     );
 
     List<Product> findAllByStoreOwnerId(Long ownerId);
+
+    @EntityGraph(attributePaths = "stocks")
+    List<Product> findAllByStatus(String status);
+
+    @EntityGraph(attributePaths = "stocks")
+    Optional<Product> findByIdAndStatus(Long id, String status);
 }
