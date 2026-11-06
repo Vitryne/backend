@@ -1,5 +1,7 @@
 package com.vitryne.api.shared.exception;
 
+import com.vitryne.api.order.exception.InvalidOrderStatusTransitionException;
+import com.vitryne.api.order.exception.OrderNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -35,6 +37,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "timestamp", Instant.now(), "status", 400, "error", "Bad Request", "message", ex.getMessage()
         ));
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleOrderNotFound(OrderNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidOrderStatusTransitionException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidOrderTransition(
+            InvalidOrderStatusTransitionException ex
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
     }
 
     @ExceptionHandler(ResponseStatusException.class)
