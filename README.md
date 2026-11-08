@@ -66,7 +66,40 @@ Edite o `.env` e preencha os valores conforme seu ambiente antes de iniciar a ap
 
 O `.env.example` documenta as variáveis utilizadas pelo projeto. Não versione o `.env` nem credenciais reais.
 
-### 3. Iniciar a aplicação e o banco
+## 3. Chaves JWT (desenvolvimento)
+
+O projeto usa um par de chaves RSA para assinar e validar os tokens JWT.
+O repositório inclui um par **exclusivo para desenvolvimento** em
+`src/main/resources/keys/dev/`. Antes de subir o projeto pela primeira vez,
+copie-o para o local que a aplicação lê:
+
+**Linux / macOS / Git Bash**
+```bash
+cp src/main/resources/keys/dev/*.pem src/main/resources/keys/
+```
+
+**Windows (PowerShell)**
+```powershell
+Copy-Item src\main\resources\keys\dev\*.pem src\main\resources\keys\
+```
+
+Depois, suba normalmente (`docker compose up --build`). Se esquecer esse
+passo, a aplicação falha na inicialização por não encontrar os arquivos.
+
+> ⚠️ As chaves de `keys/dev/` são públicas e **não devem ser usadas em
+> produção**. Em qualquer ambiente real, gere um par novo e injete como
+> secret, fora do repositório.
+
+Para usar um par próprio, gere com:
+
+```bash
+openssl genrsa -out keypair.pem 2048
+openssl rsa -in keypair.pem -pubout -out src/main/resources/keys/public.pem
+openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in keypair.pem -out src/main/resources/keys/private.pem
+rm keypair.pem
+```
+
+### 4. Iniciar a aplicação e o banco
 
 ```bash
 docker compose up -d --build
@@ -88,7 +121,7 @@ docker compose ps
 
 As migrations do Flyway são executadas automaticamente durante a inicialização da aplicação.
 
-### 4. Acessar a API
+### 5. Acessar a API
 
 Considerando a API publicada na porta `8080`:
 

@@ -62,7 +62,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/v3/api-docs",
                                 "/v3/api-docs/**",
-                                "/v3/api-docs.yaml"
+                                "/v3/api-docs.yaml",
+                                "/error"
                         ).permitAll()
 
                         // Cadastro público de clientes e lojistas, e login.
