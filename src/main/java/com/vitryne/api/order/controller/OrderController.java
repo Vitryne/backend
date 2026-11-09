@@ -2,6 +2,7 @@ package com.vitryne.api.order.controller;
 
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
+import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
 import com.vitryne.api.order.service.OrderService;
 import com.vitryne.api.shared.security.AuthenticatedUser;
@@ -44,16 +45,47 @@ public class OrderController {
 
     private final OrderService orderService;
 
+    @GetMapping("/checkout/review")
+    @Operation(
+            operationId = "reviewMyCheckout",
+            summary = "Revisar a compra antes de confirmar",
+            description = """
+                    Valida o carrinho e o endereço de entrega cadastrado e calcula os valores no backend.
+                    Não cria pedido, não baixa estoque e não altera o carrinho.
+
+                    - items[].status: OK, PRICE_CHANGED, INSUFFICIENT_QUANTITY, OUT_OF_STOCK ou PRODUCT_INACTIVE.
+                    - issues: alterações e problemas encontrados. PRICE_CHANGED apenas informa
+                      (o total já usa o preço atual); os demais têm blocking = true.
+                    - canConfirm: false quando há problema bloqueante; nesse caso reviewToken é nulo.
+                    - shippingAmount: frete, zero no MVP.
+
+                    Envie o reviewToken em POST /orders/checkout. Se os valores mudarem depois da
+                    revisão, o checkout retorna 409 e a revisão deve ser refeita.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Revisão calculada", useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "409", description = "Carrinho vazio", content = @Content)
+    })
+    public ResponseEntity<CheckoutReviewResponseDTO> review(
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt
+    ) {
+        return ResponseEntity.ok(orderService.review(AuthenticatedUser.id(jwt)));
+    }
+
     @PostMapping("/checkout")
     @Operation(
             operationId = "checkoutMyCart",
             summary = "Finalizar compra com pagamento simulado",
             description = """
-                    Converte o carrinho em pedido. O valor é recalculado pelo backend com o preço atual.
+                    Converte o carrinho em pedido usando os valores de GET /orders/checkout/review.
+                    Envie o reviewToken da revisão: se itens, preços, frete ou endereço mudaram desde
+                    então, retorna 409 sem cobrar e a revisão deve ser refeita.
                     O pagamento é simulado: envie simulatedResult = DECLINED para testar a recusa
                     (padrão APPROVED). O pagamento é registrado com valor e resultado em ambos os casos.
 
-                    Aprovado: retorna 201, baixa o estoque, cria o pedido CONFIRMED e esvazia o carrinho.
+                    Aprovado: retorna 201, baixa o estoque, cria o pedido CONFIRMED (com frete e cópia
+                    do endereço de entrega) e esvazia o carrinho.
                     Recusado: retorna 402 com o pagamento registrado; order é nulo e carrinho e estoque
                     não são alterados.
                     """,
@@ -64,10 +96,10 @@ public class OrderController {
                             schema = @Schema(implementation = CheckoutRequestDTO.class),
                             examples = {
                                     @ExampleObject(name = "Aprovado", value = """
-                                            {"paymentMethod": "CREDIT_CARD", "simulatedResult": "APPROVED"}
+                                            {"reviewToken": "9f2c4e...", "paymentMethod": "CREDIT_CARD", "simulatedResult": "APPROVED"}
                                             """),
                                     @ExampleObject(name = "Recusado", value = """
-                                            {"paymentMethod": "PIX", "simulatedResult": "DECLINED"}
+                                            {"reviewToken": "9f2c4e...", "paymentMethod": "PIX", "simulatedResult": "DECLINED"}
                                             """)
                             }
                     )
@@ -81,7 +113,7 @@ public class OrderController {
             @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos",
                     content = @Content),
             @ApiResponse(responseCode = "409",
-                    description = "Carrinho vazio, produto inativo ou estoque insuficiente",
+                    description = "Carrinho vazio, problema bloqueante ou valores alterados desde a revisão",
                     content = @Content)
     })
     public ResponseEntity<CheckoutResponseDTO> checkout(

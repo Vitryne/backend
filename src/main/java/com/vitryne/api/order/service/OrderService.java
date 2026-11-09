@@ -1,11 +1,14 @@
 package com.vitryne.api.order.service;
 
+import com.vitryne.api.address.entity.Address;
 import com.vitryne.api.cart.entity.Cart;
-import com.vitryne.api.cart.entity.CartItem;
 import com.vitryne.api.cart.repository.CartItemRepository;
 import com.vitryne.api.cart.repository.CartRepository;
+import com.vitryne.api.client.entity.Client;
+import com.vitryne.api.client.repository.ClientRepository;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
+import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.entity.Order;
@@ -14,10 +17,7 @@ import com.vitryne.api.order.repository.OrderRepository;
 import com.vitryne.api.payment.dto.PaymentResponseDTO;
 import com.vitryne.api.payment.entity.Payment;
 import com.vitryne.api.payment.service.PaymentSimulator;
-import com.vitryne.api.product.entity.Product;
-import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.stock.repository.StockRepository;
-import com.vitryne.api.store.entity.Store;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,27 +27,43 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
 public class OrderService {
 
     private static final BigDecimal ZERO_MONEY = new BigDecimal("0.00");
-    private static final int MAX_INTEGER_DIGITS = 10;
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
     private final StockRepository stockRepository;
     private final PaymentSimulator paymentSimulator;
+    private final ClientRepository clientRepository;
+    private final CheckoutEvaluator checkoutEvaluator;
 
     /**
-     * Converte o carrinho do cliente em pedido.
+     * Revisão da compra antes da confirmação. Somente leitura: não cria pedido,
+     * não baixa estoque e não altera o carrinho.
+     */
+    @Transactional(readOnly = true)
+    public CheckoutReviewResponseDTO review(Long userId) {
+        Cart cart = cartRepository.findByUserId(userId)
+                .filter(found -> !found.getItems().isEmpty())
+                .orElseThrow(OrderService::emptyCart);
+
+        return CheckoutReviewResponseDTO.from(
+                checkoutEvaluator.evaluate(cart, findDeliveryAddress(userId))
+        );
+    }
+
+    /**
+     * Converte o carrinho em pedido com os valores da revisão.
      *
-     * O valor é sempre recalculado no backend com o preço atual dos produtos.
+     * Os valores são recalculados e precisam gerar o mesmo reviewToken
+     * devolvido na revisão; caso contrário o cliente deve revisar de novo.
      * O pagamento simulado é registrado mesmo quando recusado; nesse caso
      * nenhum pedido é criado e carrinho e estoque permanecem inalterados.
      */
@@ -68,24 +84,34 @@ public class OrderService {
 
         // Trava as variações antes de carregar o carrinho, para que as
         // quantidades lidas sejam as atuais e não mudem até o commit.
-        Map<Long, Stock> lockedStocks = new LinkedHashMap<>();
-        stockRepository.lockAllByIdForUpdate(stockIds)
-                .forEach(stock -> lockedStocks.put(stock.getId(), stock));
+        stockRepository.lockAllByIdForUpdate(stockIds);
 
         Cart cart = cartRepository.findByUserId(userId)
                 .filter(found -> !found.getItems().isEmpty())
                 .orElseThrow(OrderService::emptyCart);
 
-        List<CheckoutLine> lines = cart.getItems().stream()
-                .map(item -> toCheckoutLine(item, lockedStocks))
-                .toList();
+        CheckoutEvaluator.Evaluation evaluation =
+                checkoutEvaluator.evaluate(cart, findDeliveryAddress(userId));
 
-        Store store = resolveSingleStore(lines);
-        BigDecimal total = calculateTotal(lines);
+        if (!evaluation.canConfirm()) {
+            String reasons = evaluation.issues().stream()
+                    .filter(issue -> issue.type().isBlocking())
+                    .map(CheckoutEvaluator.Issue::message)
+                    .collect(Collectors.joining("; "));
+
+            throw new ResponseStatusException(HttpStatus.CONFLICT, reasons);
+        }
+
+        if (!evaluation.reviewToken().equals(request.reviewToken())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Os valores do pedido mudaram desde a revisão. Revise novamente antes de confirmar."
+            );
+        }
 
         Payment payment = paymentSimulator.process(
                 userId,
-                total,
+                evaluation.totalAmount(),
                 request.paymentMethod(),
                 request.simulatedResult()
         );
@@ -94,10 +120,17 @@ public class OrderService {
             return new CheckoutResponseDTO(PaymentResponseDTO.from(payment), null);
         }
 
-        Order order = Order.confirm(userId, store, payment);
-        for (CheckoutLine line : lines) {
+        Order order = Order.confirm(
+                userId,
+                evaluation.store(),
+                payment,
+                evaluation.deliveryAddress(),
+                evaluation.shippingAmount()
+        );
+
+        for (CheckoutEvaluator.Line line : evaluation.lines()) {
             line.stock().decreaseStock(line.quantity());
-            order.addItem(line.stock(), line.quantity(), line.unitPrice());
+            order.addItem(line.stock(), line.quantity(), line.currentUnitPrice());
         }
 
         Order savedOrder = orderRepository.saveAndFlush(order);
@@ -155,72 +188,10 @@ public class OrderService {
         return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
     }
 
-    private CheckoutLine toCheckoutLine(CartItem item, Map<Long, Stock> lockedStocks) {
-        Stock stock = lockedStocks.get(item.getStock().getId());
-        if (stock == null) {
-            // Item incluído entre a leitura dos ids e a carga do carrinho
-            // não é possível com o lock do usuário; tratado por segurança.
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "O carrinho foi alterado. Atualize-o e tente novamente."
-            );
-        }
-
-        Product product = stock.getProduct();
-
-        if (!"ACTIVE".equals(product.getStatus())) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "O produto " + product.getName() + " não está mais ativo"
-            );
-        }
-
-        if (item.getQuantity() > stock.getQuantity()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    String.format(
-                            "Estoque insuficiente para %s (tamanho %s): disponível %d, solicitado %d",
-                            product.getName(),
-                            stock.getSize(),
-                            stock.getQuantity(),
-                            item.getQuantity()
-                    )
-            );
-        }
-
-        return new CheckoutLine(stock, item.getQuantity(), product.calculateFinalPrice());
-    }
-
-    private Store resolveSingleStore(List<CheckoutLine> lines) {
-        Store store = lines.getFirst().stock().getProduct().getStore();
-
-        boolean multipleStores = lines.stream()
-                .map(line -> line.stock().getProduct().getStore().getId())
-                .anyMatch(storeId -> !store.getId().equals(storeId));
-
-        if (multipleStores) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "O carrinho contém produtos de mais de uma loja"
-            );
-        }
-
-        return store;
-    }
-
-    private BigDecimal calculateTotal(List<CheckoutLine> lines) {
-        BigDecimal total = lines.stream()
-                .map(CheckoutLine::subtotal)
-                .reduce(ZERO_MONEY, BigDecimal::add);
-
-        if (total.precision() - total.scale() > MAX_INTEGER_DIGITS) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "O valor total do pedido excede o limite permitido"
-            );
-        }
-
-        return total;
+    private Address findDeliveryAddress(Long userId) {
+        return clientRepository.findByUserId(userId)
+                .map(Client::getAddress)
+                .orElse(null);
     }
 
     private static ResponseStatusException emptyCart() {
@@ -228,11 +199,5 @@ public class OrderService {
                 HttpStatus.CONFLICT,
                 "O carrinho está vazio"
         );
-    }
-
-    private record CheckoutLine(Stock stock, int quantity, BigDecimal unitPrice) {
-        BigDecimal subtotal() {
-            return unitPrice.multiply(BigDecimal.valueOf(quantity));
-        }
     }
 }
