@@ -22,6 +22,12 @@ public record CheckoutReviewResponseDTO(
         Long storeId,
         String storeName,
 
+        @Schema(
+                nullable = true,
+                description = "ID do endereço selecionado (GET /client/addresses). Para trocar, use POST /client/addresses/{id}/select e refaça a revisão."
+        )
+        Long deliveryAddressId,
+
         @Schema(nullable = true, description = "Endereço de entrega; nulo quando inválido")
         DeliveryAddressDTO deliveryAddress,
 
@@ -34,12 +40,16 @@ public record CheckoutReviewResponseDTO(
         BigDecimal totalAmount,
         List<CheckoutReviewIssueDTO> issues
 ) {
-    public static CheckoutReviewResponseDTO from(CheckoutEvaluator.Evaluation evaluation) {
+    public static CheckoutReviewResponseDTO from(
+            CheckoutEvaluator.Evaluation evaluation,
+            Long deliveryAddressId
+    ) {
         return new CheckoutReviewResponseDTO(
                 evaluation.reviewToken(),
                 evaluation.canConfirm(),
                 evaluation.store().getId(),
                 evaluation.store().getName(),
+                deliveryAddressId,
                 DeliveryAddressDTO.from(evaluation.deliveryAddress()),
                 evaluation.lines().stream().map(CheckoutReviewItemDTO::from).toList(),
                 evaluation.itemsSubtotal(),

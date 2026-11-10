@@ -6,7 +6,8 @@ import com.vitryne.api.cart.entity.CartItem;
 import com.vitryne.api.cart.repository.CartItemRepository;
 import com.vitryne.api.cart.repository.CartRepository;
 import com.vitryne.api.client.entity.Client;
-import com.vitryne.api.client.repository.ClientRepository;
+import com.vitryne.api.client.entity.ClientAddress;
+import com.vitryne.api.client.service.ClientAddressService;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
@@ -71,7 +72,7 @@ class OrderServiceTest {
     private PaymentSimulator paymentSimulator;
 
     @Mock
-    private ClientRepository clientRepository;
+    private ClientAddressService clientAddressService;
 
     @Spy
     private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator();
@@ -95,6 +96,7 @@ class OrderServiceTest {
         assertThat(review.canConfirm()).isTrue();
         assertThat(review.reviewToken()).isNotBlank();
         assertThat(review.storeId()).isEqualTo(1L);
+        assertThat(review.deliveryAddressId()).isEqualTo(40L);
         assertThat(review.deliveryAddress().city()).isEqualTo("Maringá");
         assertThat(review.itemsSubtotal()).isEqualByComparingTo("39.80");
         assertThat(review.shippingAmount()).isEqualByComparingTo("0.00");
@@ -128,13 +130,14 @@ class OrderServiceTest {
     void revisaoSemClienteCadastradoDeveBloquearPorEndereco() {
         Cart cart = cart(line(stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 5), 1, "19.90"));
         when(cartRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cart));
-        when(clientRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+        when(clientAddressService.findDeliveryAddress(USER_ID)).thenReturn(Optional.empty());
 
         CheckoutReviewResponseDTO review = service.review(USER_ID);
 
         assertThat(review.canConfirm()).isFalse();
         assertThat(review.reviewToken()).isNull();
         assertThat(review.deliveryAddress()).isNull();
+        assertThat(review.deliveryAddressId()).isNull();
         assertThat(review.issues()).extracting(i -> i.type())
                 .containsExactly(ReviewIssueType.INVALID_DELIVERY_ADDRESS);
     }
@@ -301,8 +304,10 @@ class OrderServiceTest {
 
     private void carrinhoEEndereco(Cart cart) {
         lenient().when(cartRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cart));
-        Client client = new Client(null, "Cliente", "11111111111", CheckoutEvaluatorTest.address());
-        lenient().when(clientRepository.findByUserId(USER_ID)).thenReturn(Optional.of(client));
+        Client client = new Client(null, "Cliente", "11111111111");
+        ClientAddress address = new ClientAddress(client, CheckoutEvaluatorTest.address());
+        ReflectionTestUtils.setField(address, "id", 40L);
+        lenient().when(clientAddressService.findDeliveryAddress(USER_ID)).thenReturn(Optional.of(address));
     }
 
     private void prepararCheckout(Cart cart) {

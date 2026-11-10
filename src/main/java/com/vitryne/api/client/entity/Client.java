@@ -1,9 +1,8 @@
 package com.vitryne.api.client.entity;
 
-import com.vitryne.api.address.entity.Address;
+import com.vitryne.api.shared.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
-import com.vitryne.api.shared.entity.User;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -25,13 +24,26 @@ public class Client {
     @Column(name = "cpf", nullable = false, length = 11)
     private String cpf;
 
-    @Embedded
-    private Address address;
+    /**
+     * Endereço de entrega escolhido pelo cliente (navegação e checkout).
+     * Os endereços ficam em client_address; as antigas colunas de endereço
+     * desta tabela não são mais usadas.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "selected_address_id")
+    private ClientAddress selectedAddress;
 
-    public Client(User user, String name, String cpf, Address address) {
+    public Client(User user, String name, String cpf) {
         this.user = user;
         this.name = name;
         this.cpf = cpf;
-        this.address = address;
+    }
+
+    public void selectAddress(ClientAddress address) {
+        if (address == null || address.getClient() != this) {
+            throw new IllegalArgumentException("O endereço não pertence a este cliente");
+        }
+
+        this.selectedAddress = address;
     }
 }

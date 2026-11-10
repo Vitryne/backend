@@ -1,5 +1,6 @@
 package com.vitryne.api.order.service;
 
+import com.vitryne.api.address.AddressNormalizer;
 import com.vitryne.api.address.entity.Address;
 import com.vitryne.api.cart.entity.Cart;
 import com.vitryne.api.cart.entity.CartItem;
@@ -21,7 +22,6 @@ import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -38,10 +38,6 @@ public class CheckoutEvaluator {
     private static final BigDecimal ZERO_MONEY = new BigDecimal("0.00");
     private static final int MAX_INTEGER_DIGITS = 10;
     private static final Pattern ZIP_CODE = Pattern.compile("\\d{8}");
-    private static final Set<String> STATES = Set.of(
-            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA",
-            "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
-    );
 
     public Evaluation evaluate(Cart cart, Address deliveryAddress) {
         List<Issue> issues = new ArrayList<>();
@@ -142,7 +138,7 @@ public class CheckoutEvaluator {
                 && address.getZipCode() != null
                 && ZIP_CODE.matcher(address.getZipCode()).matches()
                 && address.getState() != null
-                && STATES.contains(address.getState());
+                && AddressNormalizer.STATES.contains(address.getState());
 
         if (!valid) {
             issues.add(new Issue(

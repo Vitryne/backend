@@ -1,11 +1,10 @@
 package com.vitryne.api.order.service;
 
-import com.vitryne.api.address.entity.Address;
 import com.vitryne.api.cart.entity.Cart;
 import com.vitryne.api.cart.repository.CartItemRepository;
 import com.vitryne.api.cart.repository.CartRepository;
-import com.vitryne.api.client.entity.Client;
-import com.vitryne.api.client.repository.ClientRepository;
+import com.vitryne.api.client.entity.ClientAddress;
+import com.vitryne.api.client.service.ClientAddressService;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
@@ -28,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -41,7 +41,7 @@ public class OrderService {
     private final CartItemRepository cartItemRepository;
     private final StockRepository stockRepository;
     private final PaymentSimulator paymentSimulator;
-    private final ClientRepository clientRepository;
+    private final ClientAddressService clientAddressService;
     private final CheckoutEvaluator checkoutEvaluator;
 
     /**
@@ -54,8 +54,11 @@ public class OrderService {
                 .filter(found -> !found.getItems().isEmpty())
                 .orElseThrow(OrderService::emptyCart);
 
+        Optional<ClientAddress> deliveryAddress = clientAddressService.findDeliveryAddress(userId);
+
         return CheckoutReviewResponseDTO.from(
-                checkoutEvaluator.evaluate(cart, findDeliveryAddress(userId))
+                checkoutEvaluator.evaluate(cart, deliveryAddress.map(ClientAddress::getAddress).orElse(null)),
+                deliveryAddress.map(ClientAddress::getId).orElse(null)
         );
     }
 
@@ -91,7 +94,12 @@ public class OrderService {
                 .orElseThrow(OrderService::emptyCart);
 
         CheckoutEvaluator.Evaluation evaluation =
-                checkoutEvaluator.evaluate(cart, findDeliveryAddress(userId));
+                checkoutEvaluator.evaluate(
+                        cart,
+                        clientAddressService.findDeliveryAddress(userId)
+                                .map(ClientAddress::getAddress)
+                                .orElse(null)
+                );
 
         if (!evaluation.canConfirm()) {
             String reasons = evaluation.issues().stream()
@@ -186,12 +194,6 @@ public class OrderService {
         order.changeStatus(request.status());
 
         return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
-    }
-
-    private Address findDeliveryAddress(Long userId) {
-        return clientRepository.findByUserId(userId)
-                .map(Client::getAddress)
-                .orElse(null);
     }
 
     private static ResponseStatusException emptyCart() {
