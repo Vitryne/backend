@@ -4,6 +4,8 @@ import com.vitryne.api.auth.dto.store.OpeningPeriodRequestDTO;
 import com.vitryne.api.auth.dto.store.StoreBankAccountRequestDTO;
 import com.vitryne.api.auth.enums.BankAccountType;
 import com.vitryne.api.client.entity.Client;
+import com.vitryne.api.client.entity.ClientAddress;
+import com.vitryne.api.client.repository.ClientAddressRepository;
 import com.vitryne.api.client.repository.ClientRepository;
 import com.vitryne.api.shared.dto.RegistrationResponseDTO;
 import com.vitryne.api.shared.entity.User;
@@ -49,6 +51,9 @@ class RegistrationServiceTest {
 
     @Mock
     private ClientRepository clientRepository;
+
+    @Mock
+    private ClientAddressRepository clientAddressRepository;
 
     @Mock
     private StoreRepository storeRepository;
@@ -98,13 +103,16 @@ class RegistrationServiceTest {
         assertThat(savedClient.getName()).isEqualTo("Cliente Teste");
         assertThat(savedClient.getCpf()).isEqualTo("11111111111");
 
-        assertThat(savedClient.getAddress().getZipCode())
-                .isEqualTo("87000000");
+        // Endereço do cadastro vira o primeiro da lista e o selecionado.
+        var addressCaptor = ArgumentCaptor.forClass(ClientAddress.class);
+        verify(clientAddressRepository).save(addressCaptor.capture());
 
-        assertThat(savedClient.getAddress().getStreet())
-                .isEqualTo("Rua de Teste");
-
-        assertThat(savedClient.getAddress().getState()).isEqualTo("PR");
+        ClientAddress savedAddress = addressCaptor.getValue();
+        assertThat(savedAddress.getClient()).isSameAs(savedClient);
+        assertThat(savedAddress.getAddress().getZipCode()).isEqualTo("87000000");
+        assertThat(savedAddress.getAddress().getStreet()).isEqualTo("Rua de Teste");
+        assertThat(savedAddress.getAddress().getState()).isEqualTo("PR");
+        assertThat(savedClient.getSelectedAddress()).isSameAs(savedAddress);
 
         assertThat(response.userId()).isEqualTo(10L);
         assertThat(response.clientId()).isEqualTo(20L);

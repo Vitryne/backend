@@ -1,5 +1,6 @@
 package com.vitryne.api.auth.service;
 
+import com.vitryne.api.address.AddressNormalizer;
 import com.vitryne.api.address.entity.Address;
 import com.vitryne.api.shared.entity.User;
 import com.vitryne.api.auth.dto.AddressRequestDTO;
@@ -8,6 +9,8 @@ import com.vitryne.api.auth.dto.store.OpeningPeriodRequestDTO;
 import com.vitryne.api.auth.dto.store.RegisterStoreRequestDTO;
 import com.vitryne.api.auth.dto.store.StoreBankAccountRequestDTO;
 import com.vitryne.api.client.entity.Client;
+import com.vitryne.api.client.entity.ClientAddress;
+import com.vitryne.api.client.repository.ClientAddressRepository;
 import com.vitryne.api.client.repository.ClientRepository;
 import com.vitryne.api.shared.dto.RegistrationResponseDTO;
 import com.vitryne.api.shared.enums.UserRole;
@@ -33,6 +36,7 @@ public class RegistrationService {
 
     private final UserRepository userRepository;
     private final ClientRepository clientRepository;
+    private final ClientAddressRepository clientAddressRepository;
     private final StoreRepository storeRepository;
     private final PasswordEncoder passwordEncoder;
 
@@ -59,14 +63,13 @@ public class RegistrationService {
                 UserRole.CONSUMER
         );
 
-        Client client = new Client(
-                user,
-                request.name().trim(),
-                cpf,
-                address
-        );
-
+        Client client = new Client(user, request.name().trim(), cpf);
         clientRepository.saveAndFlush(client);
+
+        // O endereço do cadastro é o primeiro da lista e já fica selecionado.
+        ClientAddress clientAddress = new ClientAddress(client, address);
+        clientAddressRepository.save(clientAddress);
+        client.selectAddress(clientAddress);
 
         return new RegistrationResponseDTO(
                 user.getId(),
@@ -175,23 +178,7 @@ public class RegistrationService {
     }
 
     private Address toAddress(AddressRequestDTO request) {
-        String zipCode = request.zipCode().trim().replace("-", "");
-
-        requireFormat(
-                zipCode,
-                "[0-9]{8}",
-                "CEP deve conter 8 dígitos"
-        );
-
-        return Address.builder()
-                .zipCode(zipCode)
-                .street(request.street().trim())
-                .number(request.number().trim())
-                .neighborhood(request.neighborhood().trim())
-                .complement(trimOrNull(request.complement()))
-                .city(request.city().trim())
-                .state(request.state().trim().toUpperCase(Locale.ROOT))
-                .build();
+        return AddressNormalizer.toAddress(request);
     }
 
     private StoreBankAccount toBankAccount(
