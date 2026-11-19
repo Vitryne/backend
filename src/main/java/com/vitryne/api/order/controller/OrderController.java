@@ -8,6 +8,7 @@ import com.vitryne.api.order.service.OrderService;
 import com.vitryne.api.shared.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -42,6 +43,8 @@ import java.util.List;
                 content = @Content)
 })
 public class OrderController {
+
+    static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
     private final OrderService orderService;
 
@@ -88,6 +91,14 @@ public class OrderController {
                     do endereço de entrega) e esvazia o carrinho.
                     Recusado: retorna 402 com o pagamento registrado; order é nulo e carrinho e estoque
                     não são alterados.
+
+                    Idempotência: envie o header Idempotency-Key (um UUID novo por confirmação) e reenvie
+                    a mesma chave em caso de timeout ou erro de rede. A repetição com os mesmos dados
+                    devolve o mesmo status e corpo da primeira resposta, com replayed = true e o header
+                    Idempotent-Replayed, sem novo pagamento, pedido ou baixa de estoque. A chave vale só
+                    para o cliente autenticado; reutilizá-la com outros dados retorna 422.
+                    Uma chave só é consumida quando o pagamento é registrado: após um 409, a mesma chave
+                    pode ser usada na nova tentativa.
                     """,
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
@@ -110,19 +121,37 @@ public class OrderController {
                     useReturnTypeSchema = true),
             @ApiResponse(responseCode = "402", description = "Pagamento recusado; nenhum pedido criado",
                     useReturnTypeSchema = true),
-            @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos",
+            @ApiResponse(responseCode = "400",
+                    description = "Dados de entrada inválidos ou Idempotency-Key ausente/inválida",
                     content = @Content),
             @ApiResponse(responseCode = "409",
                     description = "Carrinho vazio, problema bloqueante ou valores alterados desde a revisão",
+                    content = @Content),
+            @ApiResponse(responseCode = "422",
+                    description = "Idempotency-Key já usada por este cliente com outros dados",
                     content = @Content)
     })
     public ResponseEntity<CheckoutResponseDTO> checkout(
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+            @Parameter(
+                    in = ParameterIn.HEADER,
+                    name = IDEMPOTENCY_KEY_HEADER,
+                    required = true,
+                    description = "Identificador único da confirmação (recomendado: UUID). "
+                            + "8 a 100 caracteres: letras, números, - ou _.",
+                    example = "3f1c9a2e-5b7d-4e8f-9a10-2b3c4d5e6f70"
+            )
+            @RequestHeader(name = IDEMPOTENCY_KEY_HEADER, required = false) String idempotencyKey,
             @Valid @RequestBody CheckoutRequestDTO request
     ) {
-        CheckoutResponseDTO response = orderService.checkout(AuthenticatedUser.id(jwt), request);
+        CheckoutResponseDTO response =
+                orderService.checkout(AuthenticatedUser.id(jwt), idempotencyKey, request);
         HttpStatus status = response.order() != null ? HttpStatus.CREATED : HttpStatus.PAYMENT_REQUIRED;
-        return ResponseEntity.status(status).body(response);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+        if (response.replayed()) {
+            builder.header("Idempotent-Replayed", "true");
+        }
+        return builder.body(response);
     }
 
     @GetMapping

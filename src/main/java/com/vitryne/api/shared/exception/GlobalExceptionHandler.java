@@ -39,6 +39,13 @@ public class GlobalExceptionHandler {
         ));
     }
 
+    /** Baixa maior que o saldo; o checkout valida antes, isto é a última barreira. */
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<Map<String, Object>> handleInsufficientStock(InsufficientStockException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleOrderNotFound(OrderNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)

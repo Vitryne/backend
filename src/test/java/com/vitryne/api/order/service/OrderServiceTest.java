@@ -13,10 +13,12 @@ import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
+import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
 import com.vitryne.api.order.enums.OrderStatus;
 import com.vitryne.api.order.enums.ReviewIssueType;
 import com.vitryne.api.order.exception.OrderNotFoundException;
+import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
 import com.vitryne.api.order.repository.OrderRepository;
 import com.vitryne.api.payment.entity.Payment;
 import com.vitryne.api.payment.enums.PaymentMethod;
@@ -55,6 +57,7 @@ class OrderServiceTest {
     private static final Long OWNER_ID = 99L;
     private static final Long STOCK_P = 101L;
     private static final Long STOCK_M = 102L;
+    private static final String KEY = "3f1c9a2e-5b7d-4e8f-9a10-2b3c4d5e6f70";
 
     @Mock
     private OrderRepository orderRepository;
@@ -73,6 +76,9 @@ class OrderServiceTest {
 
     @Mock
     private ClientAddressService clientAddressService;
+
+    @Mock
+    private CheckoutIdempotencyRepository checkoutIdempotencyRepository;
 
     @Spy
     private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator();
@@ -157,7 +163,7 @@ class OrderServiceTest {
         when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(i -> i.getArgument(0));
 
         CheckoutResponseDTO response = service.checkout(
-                USER_ID, new CheckoutRequestDTO(token, PaymentMethod.CREDIT_CARD, null)
+                USER_ID, KEY, new CheckoutRequestDTO(token, PaymentMethod.CREDIT_CARD, null)
         );
 
         verify(paymentSimulator).process(
@@ -198,7 +204,7 @@ class OrderServiceTest {
         ReflectionTestUtils.setField(product, "price", new BigDecimal("29.90"));
 
         assertThatThrownBy(() -> service.checkout(
-                USER_ID, new CheckoutRequestDTO(token, PaymentMethod.PIX, null)
+                USER_ID, KEY, new CheckoutRequestDTO(token, PaymentMethod.PIX, null)
         ))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Revise novamente");
@@ -216,7 +222,7 @@ class OrderServiceTest {
         simularPagamento(PaymentResult.DECLINED);
 
         CheckoutResponseDTO response = service.checkout(
-                USER_ID, new CheckoutRequestDTO(token, PaymentMethod.PIX, PaymentResult.DECLINED)
+                USER_ID, KEY, new CheckoutRequestDTO(token, PaymentMethod.PIX, PaymentResult.DECLINED)
         );
 
         assertThat(response.order()).isNull();
@@ -234,7 +240,7 @@ class OrderServiceTest {
         when(cartItemRepository.findStockIdsByUserId(USER_ID)).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.checkout(
-                USER_ID, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
+                USER_ID, KEY, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
         ))
                 .isInstanceOf(ResponseStatusException.class)
                 .extracting(e -> ((ResponseStatusException) e).getStatusCode())
@@ -250,7 +256,7 @@ class OrderServiceTest {
         prepararCheckout(cart);
 
         assertThatThrownBy(() -> service.checkout(
-                USER_ID, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
+                USER_ID, KEY, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
         ))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("Estoque insuficiente");
@@ -266,12 +272,122 @@ class OrderServiceTest {
         prepararCheckout(cart);
 
         assertThatThrownBy(() -> service.checkout(
-                USER_ID, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
+                USER_ID, KEY, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
         ))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("não está mais disponível");
 
         verifyNoInteractions(paymentSimulator);
+    }
+
+    // ---------- idempotência ----------
+
+    @Test
+    void confirmacaoDeveRegistrarChaveVinculadaAoClienteEAoPagamento() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 5);
+        prepararCheckout(cart(line(p, 1, "19.90")));
+        String token = service.review(USER_ID).reviewToken();
+        simularPagamento(PaymentResult.APPROVED);
+        when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(i -> i.getArgument(0));
+
+        CheckoutResponseDTO response = service.checkout(
+                USER_ID, KEY, new CheckoutRequestDTO(token, PaymentMethod.PIX, null)
+        );
+
+        ArgumentCaptor<CheckoutIdempotency> captor = ArgumentCaptor.forClass(CheckoutIdempotency.class);
+        verify(checkoutIdempotencyRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(USER_ID);
+        assertThat(captor.getValue().getIdempotencyKey()).isEqualTo(KEY);
+        assertThat(captor.getValue().getPayment().isApproved()).isTrue();
+        assertThat(response.replayed()).isFalse();
+    }
+
+    @Test
+    void recusaTambemConsomeAChave() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 5);
+        prepararCheckout(cart(line(p, 1, "19.90")));
+        String token = service.review(USER_ID).reviewToken();
+        simularPagamento(PaymentResult.DECLINED);
+
+        service.checkout(USER_ID, KEY, new CheckoutRequestDTO(token, PaymentMethod.PIX, PaymentResult.DECLINED));
+
+        verify(checkoutIdempotencyRepository).save(any(CheckoutIdempotency.class));
+    }
+
+    @Test
+    void repeticaoComMesmaChaveDeveDevolverPedidoExistenteSemNovaCobrancaNemBaixa() {
+        CheckoutRequestDTO request = new CheckoutRequestDTO("token", PaymentMethod.PIX, null);
+        Payment payment = new Payment(USER_ID, new BigDecimal("19.90"), PaymentMethod.PIX, PaymentResult.APPROVED);
+        ReflectionTestUtils.setField(payment, "id", 7L);
+        Order order = Order.confirm(USER_ID, store, payment, CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
+        ReflectionTestUtils.setField(order, "id", 70L);
+        jaProcessada(request, payment);
+        when(orderRepository.findByPaymentId(7L)).thenReturn(Optional.of(order));
+
+        CheckoutResponseDTO response = service.checkout(USER_ID, KEY, request);
+
+        assertThat(response.replayed()).isTrue();
+        assertThat(response.order().id()).isEqualTo(70L);
+        assertThat(response.payment().id()).isEqualTo(7L);
+        verifyNoInteractions(paymentSimulator, stockRepository, cartItemRepository);
+        verify(orderRepository, never()).saveAndFlush(any());
+        verify(checkoutIdempotencyRepository, never()).save(any());
+    }
+
+    @Test
+    void repeticaoDeRecusaDeveDevolverMesmaRecusa() {
+        CheckoutRequestDTO request = new CheckoutRequestDTO("token", PaymentMethod.PIX, PaymentResult.DECLINED);
+        Payment payment = new Payment(USER_ID, new BigDecimal("19.90"), PaymentMethod.PIX, PaymentResult.DECLINED);
+        jaProcessada(request, payment);
+
+        CheckoutResponseDTO response = service.checkout(USER_ID, KEY, request);
+
+        assertThat(response.replayed()).isTrue();
+        assertThat(response.order()).isNull();
+        assertThat(response.payment().result()).isEqualTo(PaymentResult.DECLINED);
+        verifyNoInteractions(paymentSimulator);
+        verify(orderRepository, never()).findByPaymentId(any());
+    }
+
+    @Test
+    void chaveReutilizadaComOutrosDadosDeveSerRecusada() {
+        Payment payment = new Payment(USER_ID, new BigDecimal("19.90"), PaymentMethod.PIX, PaymentResult.DECLINED);
+        jaProcessada(new CheckoutRequestDTO("token", PaymentMethod.PIX, PaymentResult.DECLINED), payment);
+
+        assertThatThrownBy(() -> service.checkout(
+                USER_ID, KEY, new CheckoutRequestDTO("token", PaymentMethod.PIX, PaymentResult.APPROVED)
+        ))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+
+        verifyNoInteractions(paymentSimulator);
+    }
+
+    @Test
+    void chaveDeveSerConsultadaSomenteNoEscopoDoCliente() {
+        when(cartRepository.lockUserForCartMutation(USER_ID)).thenReturn(Optional.of(USER_ID));
+        when(cartItemRepository.findStockIdsByUserId(USER_ID)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.checkout(
+                USER_ID, KEY, new CheckoutRequestDTO("token", PaymentMethod.PIX, null)
+        )).isInstanceOf(ResponseStatusException.class);
+
+        verify(checkoutIdempotencyRepository).findByUserIdAndIdempotencyKey(USER_ID, KEY);
+    }
+
+    @Test
+    void chaveAusenteOuInvalidaDeveSerRecusadaAntesDeTravarOCarrinho() {
+        CheckoutRequestDTO request = new CheckoutRequestDTO("token", PaymentMethod.PIX, null);
+
+        for (String key : new String[]{null, "", "curta", "com espaço 12345", "x".repeat(101)}) {
+            assertThatThrownBy(() -> service.checkout(USER_ID, key, request))
+                    .isInstanceOf(ResponseStatusException.class)
+                    .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                    .isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+
+        verifyNoInteractions(cartRepository, paymentSimulator, checkoutIdempotencyRepository);
     }
 
     // ---------- status ----------
@@ -316,6 +432,14 @@ class OrderServiceTest {
         when(cartRepository.lockUserForCartMutation(USER_ID)).thenReturn(Optional.of(USER_ID));
         when(cartItemRepository.findStockIdsByUserId(USER_ID)).thenReturn(ids);
         when(stockRepository.lockAllByIdForUpdate(anyCollection())).thenReturn(List.of());
+    }
+
+    /** Registra a confirmação como já processada, com o hash calculado pelo próprio serviço. */
+    private void jaProcessada(CheckoutRequestDTO request, Payment payment) {
+        String hash = (String) ReflectionTestUtils.invokeMethod(OrderService.class, "requestHash", request);
+        when(cartRepository.lockUserForCartMutation(USER_ID)).thenReturn(Optional.of(USER_ID));
+        when(checkoutIdempotencyRepository.findByUserIdAndIdempotencyKey(USER_ID, KEY))
+                .thenReturn(Optional.of(new CheckoutIdempotency(USER_ID, KEY, hash, payment)));
     }
 
     private void simularPagamento(PaymentResult result) {
