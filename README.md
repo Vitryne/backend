@@ -1,10 +1,15 @@
-![Logo Vitryne](https://raw.githubusercontent.com/Vitryne/.github/main/assets/logotipoGradiente.png)
+<div align="center">
+
+<img src="https://raw.githubusercontent.com/Vitryne/.github/main/assets/logotipoGradiente.png" width="280" alt="Logo da Vitryne" />
 
 # Backend da plataforma Vitryne
 
 API responsável pelas regras de negócio e persistência de dados da plataforma Vitryne, consumida pelas aplicações web e mobile.
 
-![Tecnologias](https://skillicons.dev/icons?i=java,spring,postgres,docker)
+![Stack](https://skillicons.dev/icons?i=java,spring,postgres,docker)
+
+</div>
+
 
 ## 📖 Visão geral
 
