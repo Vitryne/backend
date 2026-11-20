@@ -1,0 +1,17 @@
+name: Qualidade
+
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qualidade-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    uses: vitryne/.github/.github/workflows/java-quality.yml@main
