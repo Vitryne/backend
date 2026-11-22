@@ -40,6 +40,9 @@ class ProductServiceTest {
     @Mock
     private StoreRepository storeRepository;
 
+    @Mock
+    private com.vitryne.api.cart.repository.CartItemRepository cartItemRepository;
+
     @InjectMocks
     private ProductService service;
 
@@ -331,5 +334,52 @@ class ProductServiceTest {
                 2,
                 List.of("https://example.com/new.jpg")
         );
+    }
+
+    @Test
+    void deveExcluirVariosProdutosDaLojaLimpandoCarrinhos() {
+        Product first = mock(Product.class);
+        Product second = mock(Product.class);
+
+        when(productRepository.findAllByIdInAndStoreOwnerId(any(), eq(OWNER_ID)))
+                .thenReturn(List.of(first, second));
+        when(productRepository.findProductIdsWithOrders(any()))
+                .thenReturn(List.of());
+
+        service.deleteProducts(List.of(1L, 2L, 2L), OWNER_ID);
+
+        verify(cartItemRepository).deleteByProductIds(any());
+        verify(productRepository).deleteAll(List.of(first, second));
+    }
+
+    @Test
+    void naoDeveExcluirQuandoProdutoNaoPertenceALoja() {
+        Product first = mock(Product.class);
+        when(first.getId()).thenReturn(1L);
+
+        when(productRepository.findAllByIdInAndStoreOwnerId(any(), eq(OWNER_ID)))
+                .thenReturn(List.of(first));
+
+        assertThatThrownBy(() -> service.deleteProducts(List.of(1L, 9L), OWNER_ID))
+                .isInstanceOf(ProductNotFoundException.class);
+
+        verify(productRepository, never()).deleteAll(any());
+        verifyNoInteractions(cartItemRepository);
+    }
+
+    @Test
+    void naoDeveExcluirProdutoComPedidos() {
+        Product first = mock(Product.class);
+
+        when(productRepository.findAllByIdInAndStoreOwnerId(any(), eq(OWNER_ID)))
+                .thenReturn(List.of(first));
+        when(productRepository.findProductIdsWithOrders(any()))
+                .thenReturn(List.of(1L));
+
+        assertThatThrownBy(() -> service.deleteProducts(List.of(1L), OWNER_ID))
+                .isInstanceOf(com.vitryne.api.product.exception.ProductHasOrdersException.class);
+
+        verify(productRepository, never()).deleteAll(any());
+        verifyNoInteractions(cartItemRepository);
     }
 }
