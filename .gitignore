@@ -35,6 +35,3 @@ target/
 *.iml
 .vscode/
 src/main/resources/app.key
-
-# Chaves JWT locais (copiadas de keys/dev, ver README)
-src/main/resources/keys/*.pem
