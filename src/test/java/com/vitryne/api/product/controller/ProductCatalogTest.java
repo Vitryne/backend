@@ -45,7 +45,7 @@ class ProductCatalogTest {
     @BeforeEach
     void setUp() {
         ProductService service =
-                new ProductService(productRepository, storeRepository);
+                new ProductService(productRepository, storeRepository, null);
 
         this.mvc = MockMvcBuilders
                 .standaloneSetup(new ProductController(service))

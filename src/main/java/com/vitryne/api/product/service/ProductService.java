@@ -1,6 +1,8 @@
 package com.vitryne.api.product.service;
 
+import com.vitryne.api.cart.repository.CartItemRepository;
 import com.vitryne.api.product.dto.*;
+import com.vitryne.api.product.exception.ProductHasOrdersException;
 import com.vitryne.api.product.exception.ProductDontBelongToStoreException;
 import com.vitryne.api.shared.dto.AvailableSizeDTO;
 import com.vitryne.api.product.entity.Product;
@@ -18,7 +20,9 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @Service
@@ -26,6 +30,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
+    private final CartItemRepository cartItemRepository;
 
 
     @Transactional(readOnly = true)
@@ -84,6 +89,35 @@ public class ProductService {
         productRepository.flush();
 
         return toManagementResponseDTO(product);
+    }
+
+    @Transactional
+    public void deleteProducts(List<Long> ids, Long ownerId) {
+        Set<Long> uniqueIds = new LinkedHashSet<>(ids);
+
+        List<Product> products = productRepository
+                .findAllByIdInAndStoreOwnerId(uniqueIds, ownerId);
+
+        if (products.size() != uniqueIds.size()) {
+            Set<Long> found = new LinkedHashSet<>();
+            products.forEach(product -> found.add(product.getId()));
+            Long missing = uniqueIds.stream()
+                    .filter(id -> !found.contains(id))
+                    .findFirst()
+                    .orElseThrow();
+            throw new ProductNotFoundException(missing);
+        }
+
+        List<Long> withOrders = productRepository
+                .findProductIdsWithOrders(uniqueIds);
+
+        if (!withOrders.isEmpty()) {
+            throw new ProductHasOrdersException(withOrders);
+        }
+
+        cartItemRepository.deleteByProductIds(uniqueIds);
+        productRepository.deleteAll(products);
+        productRepository.flush();
     }
 
     private ProductManagementResponseDTO toManagementResponseDTO(Product product){
