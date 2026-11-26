@@ -1,5 +1,6 @@
 package com.vitryne.api.order.controller;
 
+import com.vitryne.api.order.dto.CancelOrderRequestDTO;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
@@ -87,8 +88,8 @@ public class OrderController {
                     O pagamento é simulado: envie simulatedResult = DECLINED para testar a recusa
                     (padrão APPROVED). O pagamento é registrado com valor e resultado em ambos os casos.
 
-                    Aprovado: retorna 201, baixa o estoque, cria o pedido CONFIRMED (com frete e cópia
-                    do endereço de entrega) e esvazia o carrinho.
+                    Aprovado: retorna 201, baixa o estoque, cria o pedido AWAITING_ACCEPTANCE (com frete
+                    e cópia do endereço de entrega) e esvazia o carrinho. A loja então aceita ou recusa.
                     Recusado: retorna 402 com o pagamento registrado; order é nulo e carrinho e estoque
                     não são alterados.
 
@@ -179,5 +180,43 @@ public class OrderController {
             @Parameter(description = "ID do pedido", example = "1") @PathVariable("orderId") Long orderId
     ) {
         return ResponseEntity.ok(orderService.findByCustomer(AuthenticatedUser.id(jwt), orderId));
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    @Operation(
+            operationId = "cancelMyOrder",
+            summary = "Cancelar um pedido meu",
+            description = """
+                    Cancela o pedido enquanto ele estiver AWAITING_ACCEPTANCE, CONFIRMED ou PREPARING.
+                    A partir de READY_FOR_PICKUP o cancelamento é recusado com 422.
+                    As quantidades voltam ao estoque e o pedido registra quem cancelou, o motivo e a data.
+                    O estorno do pagamento simulado não é feito nesta versão.
+                    """,
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = CancelOrderRequestDTO.class),
+                            examples = @ExampleObject(value = """
+                                    {"reason": "CHANGED_MIND"}
+                                    """)
+                    )
+            )
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido cancelado", useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "400", description = "Motivo ausente ou inválido", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Pedido não encontrado para este cliente",
+                    content = @Content),
+            @ApiResponse(responseCode = "422",
+                    description = "O pedido já está pronto para coleta, em entrega, entregue ou cancelado",
+                    content = @Content)
+    })
+    public ResponseEntity<OrderResponseDTO> cancelMine(
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "ID do pedido", example = "1") @PathVariable("orderId") Long orderId,
+            @Valid @RequestBody CancelOrderRequestDTO request
+    ) {
+        return ResponseEntity.ok(orderService.cancelByClient(AuthenticatedUser.id(jwt), orderId, request));
     }
 }

@@ -5,19 +5,23 @@ import com.vitryne.api.cart.repository.CartItemRepository;
 import com.vitryne.api.cart.repository.CartRepository;
 import com.vitryne.api.client.entity.ClientAddress;
 import com.vitryne.api.client.service.ClientAddressService;
+import com.vitryne.api.order.dto.CancelOrderRequestDTO;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
+import com.vitryne.api.order.dto.RejectOrderRequestDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
+import com.vitryne.api.order.entity.OrderItem;
 import com.vitryne.api.order.exception.OrderNotFoundException;
 import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
 import com.vitryne.api.order.repository.OrderRepository;
 import com.vitryne.api.payment.dto.PaymentResponseDTO;
 import com.vitryne.api.payment.entity.Payment;
 import com.vitryne.api.payment.service.PaymentSimulator;
+import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.stock.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -34,7 +38,9 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -158,7 +164,7 @@ public class OrderService {
             return new CheckoutResponseDTO(PaymentResponseDTO.from(payment), null, false);
         }
 
-        Order order = Order.confirm(
+        Order order = Order.place(
                 userId,
                 evaluation.store(),
                 payment,
@@ -258,18 +264,73 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
     }
 
+    /**
+     * Avança o pedido da loja para a próxima etapa, inclusive o aceite
+     * (AWAITING_ACCEPTANCE → CONFIRMED).
+     */
     @Transactional
     public OrderResponseDTO updateStatus(
             Long ownerId,
             Long orderId,
             UpdateOrderStatusRequestDTO request
     ) {
-        Order order = orderRepository.findByIdAndStoreOwnerId(orderId, ownerId)
-                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = lockStoreOrder(ownerId, orderId);
 
-        order.changeStatus(request.status());
+        order.advanceTo(request.status());
 
         return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+    }
+
+    /** Recusa da loja, só para pedidos aguardando aceite; devolve o estoque. */
+    @Transactional
+    public OrderResponseDTO rejectByStore(Long ownerId, Long orderId, RejectOrderRequestDTO request) {
+        Order order = lockStoreOrder(ownerId, orderId);
+
+        cancel(order, () -> order.rejectByStore(request.reason()));
+
+        return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+    }
+
+    /** Cancelamento pelo cliente até PREPARING; devolve o estoque. */
+    @Transactional
+    public OrderResponseDTO cancelByClient(Long userId, Long orderId, CancelOrderRequestDTO request) {
+        orderRepository.lockByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order order = orderRepository.findByIdAndUserId(orderId, userId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        cancel(order, () -> order.cancelByClient(request.reason()));
+
+        return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+    }
+
+    /**
+     * Operação única de cancelamento: aplica a regra do pedido (que valida
+     * a etapa) e devolve as quantidades ao estoque.
+     *
+     * As variações são travadas pelo mesmo lock do checkout, em ordem de id,
+     * para que a devolução não concorra com uma compra simultânea.
+     */
+    private void cancel(Order order, Runnable transition) {
+        transition.run();
+
+        Map<Long, Stock> stocks = stockRepository
+                .lockAllByIdForUpdate(orderRepository.findStockIdsByOrderId(order.getId()))
+                .stream()
+                .collect(Collectors.toMap(Stock::getId, Function.identity()));
+
+        for (OrderItem item : order.getItems()) {
+            stocks.get(item.getStock().getId()).increaseStock(item.getQuantity());
+        }
+    }
+
+    /** Trava o pedido antes de ler o status, para que transições concorrentes se serializem. */
+    private Order lockStoreOrder(Long ownerId, Long orderId) {
+        orderRepository.lockByIdAndStoreOwnerId(orderId, ownerId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+
+        return orderRepository.findByIdAndStoreOwnerId(orderId, ownerId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
     }
 
     private static ResponseStatusException emptyCart() {

@@ -1,7 +1,10 @@
 package com.vitryne.api.order.entity;
 
 import com.vitryne.api.address.entity.Address;
+import com.vitryne.api.order.enums.CanceledBy;
+import com.vitryne.api.order.enums.ClientCancellationReason;
 import com.vitryne.api.order.enums.OrderStatus;
+import com.vitryne.api.order.enums.StoreRejectionReason;
 import com.vitryne.api.order.exception.InvalidOrderStatusTransitionException;
 import com.vitryne.api.payment.entity.Payment;
 import com.vitryne.api.stock.entity.Stock;
@@ -22,7 +25,7 @@ import java.util.List;
 @Table(name = "orders")
 public class Order {
 
-        @Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
@@ -60,6 +63,17 @@ public class Order {
     })
     private Address deliveryAddress;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "canceled_by", length = 10)
+    private CanceledBy canceledBy;
+
+    /** Código do motivo: StoreRejectionReason ou ClientCancellationReason, conforme canceledBy. */
+    @Column(name = "cancellation_reason", length = 40)
+    private String cancellationReason;
+
+    @Column(name = "canceled_at")
+    private Instant canceledAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -70,10 +84,10 @@ public class Order {
     private List<OrderItem> items = new ArrayList<>();
 
     /**
-     * Cria um pedido confirmado. Exige pagamento aprovado, pois no MVP
-     * não há status de pedido aguardando pagamento.
+     * Cria o pedido aguardando o aceite da loja. Exige pagamento aprovado:
+     * o pedido só existe depois que o pagamento foi aprovado.
      */
-    public static Order confirm(
+    public static Order place(
             Long userId,
             Store store,
             Payment payment,
@@ -100,7 +114,7 @@ public class Order {
         order.userId = userId;
         order.store = store;
         order.payment = payment;
-        order.status = OrderStatus.CONFIRMED;
+        order.status = OrderStatus.AWAITING_ACCEPTANCE;
         order.deliveryAddress = Address.builder()
                 .zipCode(deliveryAddress.getZipCode())
                 .street(deliveryAddress.getStreet())
@@ -122,12 +136,55 @@ public class Order {
         return item;
     }
 
-    public void changeStatus(OrderStatus next) {
-        if (status != OrderStatus.CONFIRMED || next != OrderStatus.PREPARING) {
+    /**
+     * Avança o pedido para a etapa seguinte do fluxo (inclui o aceite,
+     * AWAITING_ACCEPTANCE → CONFIRMED). Pular, repetir ou voltar etapa é recusado.
+     */
+    public void advanceTo(OrderStatus next) {
+        if (next == OrderStatus.CANCELED && !status.isFinal()) {
+            throw new InvalidOrderStatusTransitionException(status.storeCanReject()
+                    ? "Para cancelar um pedido aguardando aceite, use a recusa com a justificativa"
+                    : "A loja não pode cancelar um pedido já aceito; o pedido está " + status);
+        }
+
+        if (next == null || next != status.next()) {
             throw new InvalidOrderStatusTransitionException(status, next);
         }
 
         this.status = next;
+    }
+
+    /** Recusa da loja; só antes do aceite. A devolução ao estoque fica com o serviço. */
+    public void rejectByStore(StoreRejectionReason reason) {
+        if (!status.storeCanReject()) {
+            throw new InvalidOrderStatusTransitionException(
+                    "A loja só pode recusar pedidos aguardando aceite; o pedido está " + status
+            );
+        }
+
+        markCanceled(CanceledBy.STORE, reason);
+    }
+
+    /** Cancelamento pelo cliente; permitido até PREPARING. */
+    public void cancelByClient(ClientCancellationReason reason) {
+        if (!status.clientCanCancel()) {
+            throw new InvalidOrderStatusTransitionException(
+                    "O pedido não pode mais ser cancelado; ele está " + status
+            );
+        }
+
+        markCanceled(CanceledBy.CLIENT, reason);
+    }
+
+    private void markCanceled(CanceledBy by, Enum<?> reason) {
+        if (reason == null) {
+            throw new IllegalArgumentException("O motivo do cancelamento é obrigatório");
+        }
+
+        this.status = OrderStatus.CANCELED;
+        this.canceledBy = by;
+        this.cancellationReason = reason.name();
+        this.canceledAt = Instant.now();
     }
 
     @PrePersist
