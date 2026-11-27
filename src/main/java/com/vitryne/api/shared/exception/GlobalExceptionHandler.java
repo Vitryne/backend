@@ -31,6 +31,14 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(com.vitryne.api.product.exception.ProductHasOrdersException.class)
+    public ResponseEntity<Map<String, Object>> handleProductHasOrders(
+            com.vitryne.api.product.exception.ProductHasOrdersException ex
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler({InvalidStartDateException.class, InvalidEndDateException.class,
             InvalidPromotionalPriceException.class, NullPromotionArgumentException.class})
     public ResponseEntity<Map<String, Object>> handleInvalidPromotion(RuntimeException ex) {

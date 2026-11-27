@@ -1,6 +1,7 @@
 package com.vitryne.api.product.controller;
 
 import com.vitryne.api.product.dto.CreateProductRequestDTO;
+import com.vitryne.api.product.dto.DeleteProductsRequestDTO;
 import com.vitryne.api.product.dto.EditProductRequestDTO;
 import com.vitryne.api.product.dto.ProductManagementResponseDTO;
 import com.vitryne.api.product.dto.StatusRequestDTO;
@@ -294,5 +295,39 @@ public class ProductManagementController {
         return ResponseEntity.ok(
                 productService.alterStatus(id, AuthenticatedUser.id(jwt), request)
         );
+    }
+
+    @Operation(
+            operationId = "deleteManagedProducts",
+            summary = "Excluir um ou mais produtos da própria loja",
+            description = """
+                    Exclui definitivamente os produtos informados e seus estoques.
+                    Aceita um ou vários ids (máximo de 100) e a operação é atômica:
+                    se algum produto falhar, nenhum é excluído.
+
+                    Itens desses produtos que estejam em carrinhos são removidos.
+                    Produtos que já possuem pedidos não podem ser excluídos;
+                    nesse caso, use a desativação.
+                    """
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Produtos excluídos"),
+            @ApiResponse(responseCode = "400", description = "Lista de ids ausente, vazia ou acima do limite", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Algum produto não existe ou não pertence à loja autenticada", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Algum produto possui pedidos", content = @Content)
+    })
+    @DeleteMapping
+    public ResponseEntity<Void> deleteProducts(
+            @Parameter(hidden = true)
+            @AuthenticationPrincipal Jwt jwt,
+
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    description = "Ids dos produtos a excluir"
+            )
+            @Valid @RequestBody DeleteProductsRequestDTO request
+    ) {
+        productService.deleteProducts(request.ids(), AuthenticatedUser.id(jwt));
+        return ResponseEntity.noContent().build();
     }
 }
