@@ -3,6 +3,7 @@ package com.vitryne.api.order.dto;
 import com.vitryne.api.order.entity.Order;
 import com.vitryne.api.order.enums.OrderStatus;
 import com.vitryne.api.payment.dto.PaymentResponseDTO;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,6 +15,14 @@ public record OrderResponseDTO(
         Long storeId,
         String storeName,
         OrderStatus status,
+
+        @Schema(description = """
+                Horário-limite para a loja aceitar o pedido; presente só em AWAITING_ACCEPTANCE
+                (null nos demais status). Vencido o prazo, o pedido é cancelado automaticamente
+                (canceledBy SYSTEM, motivo ACCEPTANCE_TIMEOUT). Use para o contador de aceite.
+                """, example = "2026-11-27T18:30:00Z")
+        Instant acceptanceDeadline,
+
         BigDecimal itemsSubtotal,
         BigDecimal shippingAmount,
         BigDecimal totalAmount,
@@ -31,6 +40,7 @@ public record OrderResponseDTO(
                 order.getStore().getId(),
                 order.getStore().getName(),
                 order.getStatus(),
+                order.getStatus() == OrderStatus.AWAITING_ACCEPTANCE ? order.getAcceptanceDeadline() : null,
                 order.getTotalAmount().subtract(order.getShippingAmount()),
                 order.getShippingAmount(),
                 order.getTotalAmount(),

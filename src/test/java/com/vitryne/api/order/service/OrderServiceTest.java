@@ -40,12 +40,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -88,6 +91,9 @@ class OrderServiceTest {
 
     @Spy
     private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator();
+
+    @Spy
+    private OrderAcceptancePolicy acceptancePolicy = new OrderAcceptancePolicy(Duration.ofMinutes(30));
 
     @InjectMocks
     private OrderService service;
@@ -325,7 +331,8 @@ class OrderServiceTest {
         CheckoutRequestDTO request = new CheckoutRequestDTO("token", PaymentMethod.PIX, null);
         Payment payment = new Payment(USER_ID, new BigDecimal("19.90"), PaymentMethod.PIX, PaymentResult.APPROVED);
         ReflectionTestUtils.setField(payment, "id", 7L);
-        Order order = Order.place(USER_ID, store, payment, CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
+        Order order = Order.place(USER_ID, store, payment, CheckoutEvaluatorTest.address(), new BigDecimal("0.00"),
+                Instant.now().plusSeconds(1800));
         ReflectionTestUtils.setField(order, "id", 70L);
         jaProcessada(request, payment);
         when(orderRepository.findByPaymentId(7L)).thenReturn(Optional.of(order));
@@ -519,7 +526,7 @@ class OrderServiceTest {
     private Order pedido() {
         Order order = Order.place(USER_ID, store,
                 new Payment(USER_ID, new BigDecimal("10.00"), PaymentMethod.PIX, PaymentResult.APPROVED),
-                CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
+                CheckoutEvaluatorTest.address(), new BigDecimal("0.00"), Instant.now().plusSeconds(1800));
         ReflectionTestUtils.setField(order, "id", 5L);
         return order;
     }

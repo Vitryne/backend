@@ -17,12 +17,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class OrderTest {
+
+    private static final Instant DEADLINE = Instant.parse("2026-11-27T18:30:00Z");
 
     private final Store store = Store.builder().id(1L).name("Loja").build();
 
@@ -173,6 +176,51 @@ class OrderTest {
         assertThat(cancelado.getCancellationReason()).isEqualTo("OTHER");
     }
 
+    @Test
+    void pedidoNasceComPrazoDeAceite() {
+        assertThat(confirm(PaymentResult.APPROVED).getAcceptanceDeadline()).isEqualTo(DEADLINE);
+        assertThatThrownBy(() -> Order.place(
+                10L, store, payment(PaymentResult.APPROVED), address(), new BigDecimal("0.00"), null
+        )).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void sistemaCancelaPedidoVencidoSemAceite() {
+        Order order = confirm(PaymentResult.APPROVED);
+
+        order.expireAcceptance(DEADLINE);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(order.getCanceledBy()).isEqualTo(CanceledBy.SYSTEM);
+        assertThat(order.getCancellationReason()).isEqualTo("ACCEPTANCE_TIMEOUT");
+        assertThat(order.getCanceledAt()).isNotNull();
+    }
+
+    @Test
+    void naoExpiraPedidoNoPrazo() {
+        Order order = confirm(PaymentResult.APPROVED);
+
+        assertThatThrownBy(() -> order.expireAcceptance(DEADLINE.minusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.AWAITING_ACCEPTANCE);
+        assertThat(order.getCanceledBy()).isNull();
+    }
+
+    @Test
+    void naoExpiraPedidoJaAceitoOuCancelado() {
+        Order aceito = confirm(PaymentResult.APPROVED);
+        aceito.advanceTo(OrderStatus.CONFIRMED);
+        Order recusado = confirm(PaymentResult.APPROVED);
+        recusado.rejectByStore(StoreRejectionReason.STORE_CLOSED);
+
+        assertThatThrownBy(() -> aceito.expireAcceptance(DEADLINE.plusSeconds(60)))
+                .isInstanceOf(InvalidOrderStatusTransitionException.class);
+        assertThatThrownBy(() -> recusado.expireAcceptance(DEADLINE.plusSeconds(60)))
+                .isInstanceOf(InvalidOrderStatusTransitionException.class);
+        assertThat(aceito.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(recusado.getCanceledBy()).isEqualTo(CanceledBy.STORE);
+    }
+
     /** Pedido levado até o status pelo fluxo normal. */
     private Order orderAt(OrderStatus target) {
         Order order = confirm(PaymentResult.APPROVED);
@@ -184,7 +232,7 @@ class OrderTest {
 
     @Test
     void freteDeveComporOTotal() {
-        Order order = Order.place(10L, store, payment(PaymentResult.APPROVED), address(), new BigDecimal("5.00"));
+        Order order = Order.place(10L, store, payment(PaymentResult.APPROVED), address(), new BigDecimal("5.00"), DEADLINE);
         order.addItem(new Stock(product(), "P", 5), 1, new BigDecimal("19.90"));
 
         assertThat(order.getTotalAmount()).isEqualByComparingTo("24.90");
@@ -193,12 +241,12 @@ class OrderTest {
     @Test
     void naoDeveCriarPedidoSemEndereco() {
         assertThatThrownBy(() -> Order.place(
-                10L, store, payment(PaymentResult.APPROVED), null, new BigDecimal("0.00")
+                10L, store, payment(PaymentResult.APPROVED), null, new BigDecimal("0.00"), DEADLINE
         )).isInstanceOf(IllegalArgumentException.class);
     }
 
     private Order confirm(PaymentResult result) {
-        return Order.place(10L, store, payment(result), address(), new BigDecimal("0.00"));
+        return Order.place(10L, store, payment(result), address(), new BigDecimal("0.00"), DEADLINE);
     }
 
     private Address address() {

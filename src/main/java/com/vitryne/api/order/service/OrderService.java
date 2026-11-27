@@ -34,6 +34,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
@@ -58,6 +59,7 @@ public class OrderService {
     private final PaymentSimulator paymentSimulator;
     private final ClientAddressService clientAddressService;
     private final CheckoutEvaluator checkoutEvaluator;
+    private final OrderAcceptancePolicy acceptancePolicy;
     private final CheckoutIdempotencyRepository checkoutIdempotencyRepository;
 
     /**
@@ -169,7 +171,8 @@ public class OrderService {
                 evaluation.store(),
                 payment,
                 evaluation.deliveryAddress(),
-                evaluation.shippingAmount()
+                evaluation.shippingAmount(),
+                acceptancePolicy.deadlineFrom(Instant.now())
         );
 
         for (CheckoutEvaluator.Line line : evaluation.lines()) {
@@ -302,6 +305,28 @@ public class OrderService {
         cancel(order, () -> order.cancelByClient(request.reason()));
 
         return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+    }
+
+    /**
+     * Cancela, pelo sistema, o pedido vencido sem aceite mais antigo e devolve
+     * o estoque. Retorna o id cancelado, ou vazio quando não há pedido vencido
+     * livre. Usado pela rotina agendada, um pedido por transação.
+     */
+    @Transactional
+    public Optional<Long> expireNextOverdueAcceptance() {
+        Instant now = Instant.now();
+        Optional<Long> orderId = orderRepository.lockNextOverdueAcceptance(now);
+        if (orderId.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Order order = orderRepository.findWithDetailsById(orderId.get())
+                .orElseThrow(() -> new OrderNotFoundException(orderId.get()));
+
+        cancel(order, () -> order.expireAcceptance(now));
+        orderRepository.saveAndFlush(order);
+
+        return orderId;
     }
 
     /**

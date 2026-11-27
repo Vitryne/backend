@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -47,6 +48,24 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             FOR UPDATE
             """, nativeQuery = true)
     Optional<Long> lockByIdAndUserId(@Param("orderId") Long orderId, @Param("userId") Long userId);
+
+    @EntityGraph(attributePaths = {"items", "payment", "store"})
+    Optional<Order> findWithDetailsById(Long id);
+
+    /**
+     * Trava o pedido vencido sem aceite mais antigo. SKIP LOCKED pula os que
+     * outra transação já travou (aceite, recusa, cancelamento ou outra instância
+     * da rotina), então cada pedido é processado por uma só transação.
+     */
+    @Query(value = """
+            SELECT id
+            FROM orders
+            WHERE status = 'AWAITING_ACCEPTANCE' AND acceptance_deadline <= :now
+            ORDER BY acceptance_deadline, id
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    Optional<Long> lockNextOverdueAcceptance(@Param("now") Instant now);
 
     @Query("SELECT i.stock.id FROM OrderItem i WHERE i.order.id = :orderId")
     List<Long> findStockIdsByOrderId(@Param("orderId") Long orderId);

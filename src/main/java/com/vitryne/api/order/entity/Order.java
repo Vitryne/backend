@@ -5,6 +5,7 @@ import com.vitryne.api.order.enums.CanceledBy;
 import com.vitryne.api.order.enums.ClientCancellationReason;
 import com.vitryne.api.order.enums.OrderStatus;
 import com.vitryne.api.order.enums.StoreRejectionReason;
+import com.vitryne.api.order.enums.SystemCancellationReason;
 import com.vitryne.api.order.exception.InvalidOrderStatusTransitionException;
 import com.vitryne.api.payment.entity.Payment;
 import com.vitryne.api.stock.entity.Stock;
@@ -63,6 +64,10 @@ public class Order {
     })
     private Address deliveryAddress;
 
+    /** Limite para a loja aceitar; vencido, o pedido é cancelado pelo sistema. */
+    @Column(name = "acceptance_deadline")
+    private Instant acceptanceDeadline;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "canceled_by", length = 10)
     private CanceledBy canceledBy;
@@ -92,7 +97,8 @@ public class Order {
             Store store,
             Payment payment,
             Address deliveryAddress,
-            BigDecimal shippingAmount
+            BigDecimal shippingAmount,
+            Instant acceptanceDeadline
     ) {
         if (userId == null || store == null) {
             throw new IllegalArgumentException("Usuário e loja são obrigatórios");
@@ -110,11 +116,16 @@ public class Order {
             throw new IllegalArgumentException("O pedido exige um pagamento aprovado");
         }
 
+        if (acceptanceDeadline == null) {
+            throw new IllegalArgumentException("O prazo de aceite é obrigatório");
+        }
+
         Order order = new Order();
         order.userId = userId;
         order.store = store;
         order.payment = payment;
         order.status = OrderStatus.AWAITING_ACCEPTANCE;
+        order.acceptanceDeadline = acceptanceDeadline;
         order.deliveryAddress = Address.builder()
                 .zipCode(deliveryAddress.getZipCode())
                 .street(deliveryAddress.getStreet())
@@ -174,6 +185,24 @@ public class Order {
         }
 
         markCanceled(CanceledBy.CLIENT, reason);
+    }
+
+    /**
+     * Cancelamento automático por falta de aceite. Confere de novo o status e o
+     * prazo: um pedido já aceito, recusado ou ainda no prazo não é cancelado.
+     */
+    public void expireAcceptance(Instant now) {
+        if (status != OrderStatus.AWAITING_ACCEPTANCE) {
+            throw new InvalidOrderStatusTransitionException(
+                    "Só expira pedido aguardando aceite; o pedido está " + status
+            );
+        }
+
+        if (acceptanceDeadline == null || now.isBefore(acceptanceDeadline)) {
+            throw new IllegalStateException("O prazo de aceite do pedido " + id + " ainda não venceu");
+        }
+
+        markCanceled(CanceledBy.SYSTEM, SystemCancellationReason.ACCEPTANCE_TIMEOUT);
     }
 
     private void markCanceled(CanceledBy by, Enum<?> reason) {
