@@ -1,6 +1,7 @@
 package com.vitryne.api.product.dto;
 
 import com.vitryne.api.shared.dto.AvailableSizeDTO;
+import com.vitryne.api.store.dto.StoreSummaryDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
@@ -43,6 +44,9 @@ public class ProductClientResponseDTO {
             example = "80.00"
     )
     private BigDecimal finalPrice;
+
+    @Schema(description = "Loja que vende o produto")
+    private StoreSummaryDTO store;
 
     @Schema(description = "Status do produto", example = "ACTIVE")
     private String status;

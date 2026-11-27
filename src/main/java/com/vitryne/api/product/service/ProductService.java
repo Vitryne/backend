@@ -11,6 +11,7 @@ import com.vitryne.api.shared.exception.ProductNotFoundException;
 import com.vitryne.api.product.repository.ProductRepository;
 import com.vitryne.api.stock.dto.StockManagementResponseDTO;
 import com.vitryne.api.stock.entity.Stock;
+import com.vitryne.api.store.dto.StoreSummaryDTO;
 import com.vitryne.api.store.entity.Store;
 import com.vitryne.api.store.exception.StoreNotFoundException;
 import com.vitryne.api.store.repository.StoreRepository;
@@ -203,6 +204,7 @@ public class ProductService {
                 .price(product.getPrice())
                 .promotionalPrice(product.getPromotionalPrice())
                 .finalPrice(finalPrice)
+                .store(StoreSummaryDTO.from(product.getStore()))
                 .status(product.getStatus())
                 .photoUrls(
                         product.getPhotoUrls() == null
