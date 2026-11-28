@@ -288,11 +288,7 @@ public class OrderService {
 
         order.advanceTo(request.status());
 
-        OrderResponseDTO response = OrderResponseDTO.from(orderRepository.saveAndFlush(order));
-        eventPublisher.publishEvent(
-                new OrderChangedEvent(OrderChangedEvent.Type.ORDER_UPDATED, response));
-
-        return response;
+        return publishUpdated(orderRepository.saveAndFlush(order));
     }
 
     /** Recusa da loja, só para pedidos aguardando aceite; devolve o estoque. */
@@ -302,7 +298,7 @@ public class OrderService {
 
         cancel(order, () -> order.rejectByStore(request.reason()));
 
-        return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+        return publishUpdated(orderRepository.saveAndFlush(order));
     }
 
     /** Cancelamento pelo cliente até PREPARING; devolve o estoque. */
@@ -315,7 +311,7 @@ public class OrderService {
 
         cancel(order, () -> order.cancelByClient(request.reason()));
 
-        return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+        return publishUpdated(orderRepository.saveAndFlush(order));
     }
 
     /**
@@ -335,9 +331,16 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(orderId.get()));
 
         cancel(order, () -> order.expireAcceptance(now));
-        orderRepository.saveAndFlush(order);
+        publishUpdated(orderRepository.saveAndFlush(order));
 
         return orderId;
+    }
+
+    private OrderResponseDTO publishUpdated(Order order) {
+        OrderResponseDTO response = OrderResponseDTO.from(order);
+        eventPublisher.publishEvent(
+                new OrderChangedEvent(OrderChangedEvent.Type.ORDER_UPDATED, response));
+        return response;
     }
 
     /**
