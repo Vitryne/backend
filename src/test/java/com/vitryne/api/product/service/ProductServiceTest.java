@@ -43,6 +43,9 @@ class ProductServiceTest {
     @Mock
     private com.vitryne.api.cart.repository.CartItemRepository cartItemRepository;
 
+    @Mock
+    private com.vitryne.api.image.service.ImageService imageService;
+
     @InjectMocks
     private ProductService service;
 

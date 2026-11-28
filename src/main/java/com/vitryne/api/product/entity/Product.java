@@ -23,6 +23,8 @@ import java.util.List;
 @Table(name = "product")
 public class  Product {
 
+    public static final int MAX_PHOTOS = 8;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -154,13 +156,7 @@ public class  Product {
             );
         }
 
-        if (photoUrls.stream().anyMatch(
-                url -> url == null || url.isBlank()
-        )) {
-            throw new InvalidInputException(
-                    "As imagens não podem ter URLs vazias"
-            );
-        }
+        validatePhotoUrls(photoUrls);
 
         if (store == null) {
             throw new InvalidInputException(
@@ -319,13 +315,7 @@ public class  Product {
             );
         }
 
-        if (photoUrls.stream().anyMatch(
-                url -> url == null || url.isBlank()
-        )) {
-            throw new InvalidInputException(
-                    "As imagens não podem ter URLs vazias"
-            );
-        }
+        validatePhotoUrls(photoUrls);
 
         if(color == null || color.isBlank()){
             throw new InvalidInputException(
@@ -354,6 +344,29 @@ public class  Product {
         this.color = color;
         this.stockWarningThreshold = stockWarningThreshold;
         this.photoUrls = new ArrayList<>(photoUrls);
+    }
+
+    /** A primeira foto da lista é a capa do produto. */
+    private static void validatePhotoUrls(List<String> photoUrls) {
+        if (photoUrls.size() > MAX_PHOTOS) {
+            throw new InvalidInputException(
+                    "O produto pode ter no máximo " + MAX_PHOTOS + " fotos"
+            );
+        }
+
+        if (photoUrls.stream().anyMatch(
+                url -> url == null || url.isBlank()
+        )) {
+            throw new InvalidInputException(
+                    "As imagens não podem ter URLs vazias"
+            );
+        }
+
+        if (new java.util.HashSet<>(photoUrls).size() != photoUrls.size()) {
+            throw new InvalidInputException(
+                    "A mesma foto foi informada mais de uma vez"
+            );
+        }
     }
 
     public void changeStatus(ProductStatus status){
