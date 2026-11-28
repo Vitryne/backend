@@ -17,6 +17,7 @@ import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
 import com.vitryne.api.order.enums.OrderStatus;
 import com.vitryne.api.order.enums.ReviewIssueType;
+import com.vitryne.api.order.event.OrderChangedEvent;
 import com.vitryne.api.order.exception.OrderNotFoundException;
 import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
 import com.vitryne.api.order.repository.OrderRepository;
@@ -35,6 +36,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
@@ -79,6 +81,9 @@ class OrderServiceTest {
 
     @Mock
     private CheckoutIdempotencyRepository checkoutIdempotencyRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @Spy
     private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator();
@@ -148,8 +153,6 @@ class OrderServiceTest {
                 .containsExactly(ReviewIssueType.INVALID_DELIVERY_ADDRESS);
     }
 
-    // ---------- checkout ----------
-
     @Test
     void pagamentoAprovadoDeveCriarPedidoComValoresDaRevisao() {
         Product product = product(1L, "19.90", "ACTIVE");
@@ -191,6 +194,11 @@ class OrderServiceTest {
         assertThat(response.order().shippingAmount()).isEqualByComparingTo("0.00");
         assertThat(response.order().itemsSubtotal()).isEqualByComparingTo("59.70");
         assertThat(response.order().deliveryAddress().state()).isEqualTo("PR");
+
+        ArgumentCaptor<OrderChangedEvent> event = ArgumentCaptor.forClass(OrderChangedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(OrderChangedEvent.Type.ORDER_CREATED);
+        assertThat(event.getValue().order()).isSameAs(response.order());
     }
 
     @Test
@@ -405,6 +413,10 @@ class OrderServiceTest {
         );
 
         assertThat(response.status()).isEqualTo(OrderStatus.PREPARING);
+
+        ArgumentCaptor<OrderChangedEvent> event = ArgumentCaptor.forClass(OrderChangedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(OrderChangedEvent.Type.ORDER_UPDATED);
     }
 
     @Test

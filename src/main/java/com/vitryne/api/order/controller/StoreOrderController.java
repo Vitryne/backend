@@ -3,6 +3,7 @@ package com.vitryne.api.order.controller;
 import com.vitryne.api.order.dto.OrderResponseDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.service.OrderService;
+import com.vitryne.api.order.stream.OrderStreamService;
 import com.vitryne.api.shared.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -15,11 +16,13 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.List;
 
@@ -41,6 +44,7 @@ import java.util.List;
 public class StoreOrderController {
 
     private final OrderService orderService;
+    private final OrderStreamService orderStreamService;
 
     @GetMapping
     @Operation(
@@ -53,6 +57,17 @@ public class StoreOrderController {
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt
     ) {
         return ResponseEntity.ok(orderService.listByStoreOwner(AuthenticatedUser.id(jwt)));
+    }
+
+    @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(
+            operationId = "streamStoreOrders",
+            summary = "Acompanhar pedidos da loja em tempo real (SSE)",
+            description = "Stream text/event-stream. Eventos: `connected` (conexão aberta), "
+                    + "`order_created` e `order_updated`, ambos com o pedido (OrderResponseDTO) em JSON."
+    )
+    public SseEmitter stream(@Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
+        return orderStreamService.subscribe(AuthenticatedUser.id(jwt));
     }
 
     @GetMapping("/{orderId}")
