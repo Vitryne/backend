@@ -79,6 +79,8 @@ O `.env.example` documenta as variáveis utilizadas pelo projeto. Não versione 
 | `CLOUDINARY_FOLDER` | Não | Pasta das imagens no Cloudinary. Padrão: `vitryne` |
 | `IMAGE_ORPHAN_RETENTION` | Não | Por quanto tempo uma imagem enviada e não usada em produto é mantida. Padrão: `24h` |
 | `IMAGE_ORPHAN_CLEANUP_INTERVAL` | Não | Intervalo da limpeza das imagens não usadas. Padrão: `PT1H` |
+| `ORDER_ACCEPTANCE_TIMEOUT` | Não | Prazo para a loja aceitar o pedido; vencido, o pedido é cancelado. Padrão: `30m` |
+| `ORDER_ACCEPTANCE_EXPIRATION_INTERVAL` | Não | Intervalo da verificação dos pedidos vencidos. Padrão: `PT1M` |
 
 ### 3. Configurar o Cloudinary (upload de imagens)
 
