@@ -8,14 +8,20 @@ import com.vitryne.api.cart.repository.CartRepository;
 import com.vitryne.api.client.entity.Client;
 import com.vitryne.api.client.entity.ClientAddress;
 import com.vitryne.api.client.service.ClientAddressService;
+import com.vitryne.api.order.dto.CancelOrderRequestDTO;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
+import com.vitryne.api.order.dto.RejectOrderRequestDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
+import com.vitryne.api.order.enums.CanceledBy;
+import com.vitryne.api.order.enums.ClientCancellationReason;
 import com.vitryne.api.order.enums.OrderStatus;
+import com.vitryne.api.order.enums.StoreRejectionReason;
+import com.vitryne.api.order.exception.InvalidOrderStatusTransitionException;
 import com.vitryne.api.order.enums.ReviewIssueType;
 import com.vitryne.api.order.exception.OrderNotFoundException;
 import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
@@ -174,7 +180,7 @@ class OrderServiceTest {
         ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).saveAndFlush(captor.capture());
         Order order = captor.getValue();
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.AWAITING_ACCEPTANCE);
         assertThat(order.getStore()).isSameAs(store);
         assertThat(order.getShippingAmount()).isEqualByComparingTo("0.00");
         assertThat(order.getTotalAmount()).isEqualByComparingTo("59.70");
@@ -319,7 +325,7 @@ class OrderServiceTest {
         CheckoutRequestDTO request = new CheckoutRequestDTO("token", PaymentMethod.PIX, null);
         Payment payment = new Payment(USER_ID, new BigDecimal("19.90"), PaymentMethod.PIX, PaymentResult.APPROVED);
         ReflectionTestUtils.setField(payment, "id", 7L);
-        Order order = Order.confirm(USER_ID, store, payment, CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
+        Order order = Order.place(USER_ID, store, payment, CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
         ReflectionTestUtils.setField(order, "id", 70L);
         jaProcessada(request, payment);
         when(orderRepository.findByPaymentId(7L)).thenReturn(Optional.of(order));
@@ -393,30 +399,148 @@ class OrderServiceTest {
     // ---------- status ----------
 
     @Test
-    void lojistaDeveMoverPedidoParaPreparing() {
-        Order order = Order.confirm(USER_ID, store,
-                new Payment(USER_ID, new BigDecimal("10.00"), PaymentMethod.PIX, PaymentResult.APPROVED),
-                CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
-        when(orderRepository.findByIdAndStoreOwnerId(5L, OWNER_ID)).thenReturn(Optional.of(order));
-        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+    void lojistaAceitaPedidoTravandoAntesDeLer() {
+        Order order = pedido();
+        lojaEncontra(order);
 
         OrderResponseDTO response = service.updateStatus(
-                OWNER_ID, 5L, new UpdateOrderStatusRequestDTO(OrderStatus.PREPARING)
+                OWNER_ID, 5L, new UpdateOrderStatusRequestDTO(OrderStatus.CONFIRMED)
         );
 
-        assertThat(response.status()).isEqualTo(OrderStatus.PREPARING);
+        assertThat(response.status()).isEqualTo(OrderStatus.CONFIRMED);
+        assertThat(response.cancellation()).isNull();
+        var inOrder = inOrder(orderRepository);
+        inOrder.verify(orderRepository).lockByIdAndStoreOwnerId(5L, OWNER_ID);
+        inOrder.verify(orderRepository).findByIdAndStoreOwnerId(5L, OWNER_ID);
+        verifyNoInteractions(stockRepository);
+    }
+
+    @Test
+    void transicaoInvalidaNaoSalva() {
+        Order order = pedido();
+        lojaEncontra(order);
+
+        assertThatThrownBy(() -> service.updateStatus(
+                OWNER_ID, 5L, new UpdateOrderStatusRequestDTO(OrderStatus.PREPARING)
+        )).isInstanceOf(InvalidOrderStatusTransitionException.class);
+
+        verify(orderRepository, never()).saveAndFlush(any());
     }
 
     @Test
     void pedidoDeOutraLojaDeveRetornarNaoEncontrado() {
-        when(orderRepository.findByIdAndStoreOwnerId(5L, OWNER_ID)).thenReturn(Optional.empty());
+        when(orderRepository.lockByIdAndStoreOwnerId(5L, OWNER_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateStatus(
-                OWNER_ID, 5L, new UpdateOrderStatusRequestDTO(OrderStatus.PREPARING)
+                OWNER_ID, 5L, new UpdateOrderStatusRequestDTO(OrderStatus.CONFIRMED)
         )).isInstanceOf(OrderNotFoundException.class);
+        assertThatThrownBy(() -> service.rejectByStore(
+                OWNER_ID, 5L, new RejectOrderRequestDTO(StoreRejectionReason.STORE_CLOSED)
+        )).isInstanceOf(OrderNotFoundException.class);
+
+        verify(orderRepository, never()).findByIdAndStoreOwnerId(any(), any());
+        verifyNoInteractions(stockRepository);
+    }
+
+    @Test
+    void recusaDaLojaDevolveOEstoque() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 3);
+        Stock m = stock(STOCK_M, product(2L, "29.90", "ACTIVE"), "M", 0);
+        Order order = pedido();
+        order.addItem(p, 2, new BigDecimal("19.90"));
+        order.addItem(m, 1, new BigDecimal("29.90"));
+        lojaEncontra(order);
+        estoqueDoPedido(p, m);
+
+        OrderResponseDTO response = service.rejectByStore(
+                OWNER_ID, 5L, new RejectOrderRequestDTO(StoreRejectionReason.ITEM_UNAVAILABLE)
+        );
+
+        assertThat(response.status()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(response.cancellation().canceledBy()).isEqualTo(CanceledBy.STORE);
+        assertThat(response.cancellation().reason()).isEqualTo("ITEM_UNAVAILABLE");
+        assertThat(p.getQuantity()).isEqualTo(5);
+        assertThat(m.getQuantity()).isEqualTo(1);
+    }
+
+    @Test
+    void recusaRecusadaNaoDevolveEstoque() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 3);
+        Order order = pedido();
+        order.addItem(p, 2, new BigDecimal("19.90"));
+        order.advanceTo(OrderStatus.CONFIRMED);
+        lojaEncontra(order);
+
+        assertThatThrownBy(() -> service.rejectByStore(
+                OWNER_ID, 5L, new RejectOrderRequestDTO(StoreRejectionReason.ITEM_UNAVAILABLE)
+        )).isInstanceOf(InvalidOrderStatusTransitionException.class);
+
+        assertThat(p.getQuantity()).isEqualTo(3);
+        verifyNoInteractions(stockRepository);
+        verify(orderRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void clienteCancelaEDevolveOEstoque() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 0);
+        Order order = pedido();
+        order.addItem(p, 2, new BigDecimal("19.90"));
+        order.advanceTo(OrderStatus.CONFIRMED);
+        clienteEncontra(order);
+        estoqueDoPedido(p);
+
+        OrderResponseDTO response = service.cancelByClient(
+                USER_ID, 5L, new CancelOrderRequestDTO(ClientCancellationReason.CHANGED_MIND)
+        );
+
+        assertThat(response.status()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(response.cancellation().canceledBy()).isEqualTo(CanceledBy.CLIENT);
+        assertThat(response.cancellation().reason()).isEqualTo("CHANGED_MIND");
+        assertThat(response.cancellation().canceledAt()).isNotNull();
+        assertThat(p.getQuantity()).isEqualTo(2);
+        var inOrder = inOrder(orderRepository);
+        inOrder.verify(orderRepository).lockByIdAndUserId(5L, USER_ID);
+        inOrder.verify(orderRepository).findByIdAndUserId(5L, USER_ID);
+    }
+
+    @Test
+    void pedidoDeOutroClienteNaoECancelado() {
+        when(orderRepository.lockByIdAndUserId(5L, USER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelByClient(
+                USER_ID, 5L, new CancelOrderRequestDTO(ClientCancellationReason.CHANGED_MIND)
+        )).isInstanceOf(OrderNotFoundException.class);
+
+        verifyNoInteractions(stockRepository);
     }
 
     // ---------- apoio ----------
+
+    private Order pedido() {
+        Order order = Order.place(USER_ID, store,
+                new Payment(USER_ID, new BigDecimal("10.00"), PaymentMethod.PIX, PaymentResult.APPROVED),
+                CheckoutEvaluatorTest.address(), new BigDecimal("0.00"));
+        ReflectionTestUtils.setField(order, "id", 5L);
+        return order;
+    }
+
+    private void lojaEncontra(Order order) {
+        when(orderRepository.lockByIdAndStoreOwnerId(5L, OWNER_ID)).thenReturn(Optional.of(5L));
+        when(orderRepository.findByIdAndStoreOwnerId(5L, OWNER_ID)).thenReturn(Optional.of(order));
+        lenient().when(orderRepository.saveAndFlush(order)).thenReturn(order);
+    }
+
+    private void clienteEncontra(Order order) {
+        when(orderRepository.lockByIdAndUserId(5L, USER_ID)).thenReturn(Optional.of(5L));
+        when(orderRepository.findByIdAndUserId(5L, USER_ID)).thenReturn(Optional.of(order));
+        lenient().when(orderRepository.saveAndFlush(order)).thenReturn(order);
+    }
+
+    private void estoqueDoPedido(Stock... stocks) {
+        List<Long> ids = java.util.Arrays.stream(stocks).map(Stock::getId).toList();
+        when(orderRepository.findStockIdsByOrderId(5L)).thenReturn(ids);
+        when(stockRepository.lockAllByIdForUpdate(ids)).thenReturn(List.of(stocks));
+    }
 
     private void carrinhoEEndereco(Cart cart) {
         lenient().when(cartRepository.findByUserId(USER_ID)).thenReturn(Optional.of(cart));

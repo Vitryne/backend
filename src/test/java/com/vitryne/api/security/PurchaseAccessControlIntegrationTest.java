@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.util.UUID;
@@ -119,11 +120,24 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
         }
 
         @Test
+        void naoCancelaPedidoAlheio() throws Exception {
+            long orderBruno = placeOrder(bruno, stockA);
+
+            mvc.perform(as(ana, post("/orders/" + orderBruno + "/cancel")).content("{\"reason\": \"CHANGED_MIND\"}"))
+                    .andExpect(status().isNotFound());
+
+            assertThat(orderStatus(orderBruno)).isEqualTo("AWAITING_ACCEPTANCE");
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(9);
+        }
+
+        @Test
         void naoUsaRotasDeLojista() throws Exception {
             long orderAna = placeOrder(ana, stockA);
 
             mvc.perform(as(ana, get("/store/orders"))).andExpect(status().isForbidden());
-            mvc.perform(as(ana, patch("/store/orders/" + orderAna + "/status")).content("{\"status\": \"PREPARING\"}"))
+            mvc.perform(as(ana, patch("/store/orders/" + orderAna + "/status")).content("{\"status\": \"CONFIRMED\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(as(ana, post("/store/orders/" + orderAna + "/reject")).content("{\"reason\": \"STORE_CLOSED\"}"))
                     .andExpect(status().isForbidden());
             mvc.perform(as(ana, patch("/product/manager/" + productA + "/status")).content("{\"status\": \"INACTIVE\"}"))
                     .andExpect(status().isForbidden());
@@ -192,14 +206,18 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
                     .andExpect(status().isNotFound());
 
             mvc.perform(asOwner(shopA, patch("/store/orders/" + orderLojaB + "/status"))
-                            .content("{\"status\": \"PREPARING\"}"))
+                            .content("{\"status\": \"CONFIRMED\"}"))
+                    .andExpect(status().isNotFound());
+            mvc.perform(asOwner(shopA, post("/store/orders/" + orderLojaB + "/reject"))
+                            .content("{\"reason\": \"STORE_CLOSED\"}"))
                     .andExpect(status().isNotFound());
 
             mvc.perform(asOwner(shopA, get("/store/orders")))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.length()").value(0));
 
-            assertThat(orderStatus(orderLojaB)).isEqualTo("CONFIRMED");
+            assertThat(orderStatus(orderLojaB)).isEqualTo("AWAITING_ACCEPTANCE");
+            assertThat(fx.stockQuantity(stockB)).isEqualTo(9);
         }
 
         @Test
@@ -208,6 +226,11 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
             mvc.perform(asOwner(shopA, post("/cart/items")).content("{\"stockId\": " + stockB + ", \"quantity\": 1}"))
                     .andExpect(status().isForbidden());
             mvc.perform(asOwner(shopA, get("/orders"))).andExpect(status().isForbidden());
+
+            long orderAna = placeOrder(ana, stockA);
+            mvc.perform(asOwner(shopA, post("/orders/" + orderAna + "/cancel")).content("{\"reason\": \"OTHER\"}"))
+                    .andExpect(status().isForbidden());
+            assertThat(orderStatus(orderAna)).isEqualTo("AWAITING_ACCEPTANCE");
         }
     }
 
@@ -346,42 +369,169 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
     class TransicoesDeStatus {
 
         @Test
-        void confirmadoParaEmPreparoEPermitido() throws Exception {
+        void pedidoNasceAguardandoAceite() throws Exception {
             long order = placeOrder(ana, stockA);
 
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"PREPARING\"}"))
+            mvc.perform(as(ana, get("/orders/" + order)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("PREPARING"));
+                    .andExpect(jsonPath("$.status").value("AWAITING_ACCEPTANCE"))
+                    .andExpect(jsonPath("$.cancellation").doesNotExist());
         }
 
         @Test
-        void transicoesInvalidasSaoRejeitadas() throws Exception {
+        void lojaAceitaEAvancaUmaEtapaPorVezAteAEntrega() throws Exception {
             long order = placeOrder(ana, stockA);
 
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"CONFIRMED\"}"))
-                    .andExpect(status().isConflict());
+            for (String next : new String[]{"CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED"}) {
+                advance(order, next)
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.status").value(next));
+            }
 
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"PREPARING\"}"))
-                    .andExpect(status().isOk());
+            assertThat(fx.stockQuantity(stockA)).as("entrega não devolve estoque").isEqualTo(9);
+        }
 
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"PREPARING\"}"))
-                    .andExpect(status().isConflict());
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"CONFIRMED\"}"))
-                    .andExpect(status().isConflict());
+        @Test
+        void pularRepetirOuVoltarEtapaRetorna422() throws Exception {
+            long order = placeOrder(ana, stockA);
 
-            assertThat(orderStatus(order)).isEqualTo("PREPARING");
+            advance(order, "PREPARING")
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.message").value(
+                            "Não é possível alterar o pedido de AWAITING_ACCEPTANCE para PREPARING; "
+                                    + "a próxima etapa é CONFIRMED"));
+            advance(order, "DELIVERED").andExpect(status().isUnprocessableContent());
+
+            advance(order, "CONFIRMED").andExpect(status().isOk());
+            advance(order, "CONFIRMED").andExpect(status().isUnprocessableContent());
+            advance(order, "AWAITING_ACCEPTANCE").andExpect(status().isUnprocessableContent());
+            advance(order, "CANCELED").andExpect(status().isUnprocessableContent());
+
+            assertThat(orderStatus(order)).isEqualTo("CONFIRMED");
         }
 
         @Test
         void statusDesconhecidoOuAusenteERejeitado() throws Exception {
             long order = placeOrder(ana, stockA);
 
-            mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{\"status\": \"DELIVERED\"}"))
-                    .andExpect(status().isBadRequest());
+            advance(order, "SHIPPED").andExpect(status().isBadRequest());
             mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status")).content("{}"))
                     .andExpect(status().isBadRequest());
 
+            assertThat(orderStatus(order)).isEqualTo("AWAITING_ACCEPTANCE");
+        }
+
+        @Test
+        void lojaRecusaComJustificativaEOEstoqueVolta() throws Exception {
+            long order = placeOrder(ana, stockA);
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(9);
+
+            reject(order, "ITEM_UNAVAILABLE")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELED"))
+                    .andExpect(jsonPath("$.cancellation.canceledBy").value("STORE"))
+                    .andExpect(jsonPath("$.cancellation.reason").value("ITEM_UNAVAILABLE"))
+                    .andExpect(jsonPath("$.cancellation.canceledAt").exists());
+
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(10);
+            mvc.perform(as(ana, get("/orders/" + order)))
+                    .andExpect(jsonPath("$.status").value("CANCELED"))
+                    .andExpect(jsonPath("$.cancellation.canceledBy").value("STORE"));
+        }
+
+        @Test
+        void recusaExigeJustificativaDaListaESoAntesDoAceite() throws Exception {
+            long order = placeOrder(ana, stockA);
+
+            mvc.perform(asOwner(shopA, post("/store/orders/" + order + "/reject")).content("{}"))
+                    .andExpect(status().isBadRequest());
+            reject(order, "PORQUE_SIM").andExpect(status().isBadRequest());
+
+            advance(order, "CONFIRMED").andExpect(status().isOk());
+            reject(order, "STORE_CLOSED").andExpect(status().isUnprocessableContent());
+
             assertThat(orderStatus(order)).isEqualTo("CONFIRMED");
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(9);
+        }
+
+        @Test
+        void clienteCancelaAteOPreparoEOEstoqueVolta() throws Exception {
+            long order = placeOrder(ana, stockA);
+            advance(order, "CONFIRMED").andExpect(status().isOk());
+            advance(order, "PREPARING").andExpect(status().isOk());
+
+            cancel(ana, order, "CHANGED_MIND")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("CANCELED"))
+                    .andExpect(jsonPath("$.cancellation.canceledBy").value("CLIENT"))
+                    .andExpect(jsonPath("$.cancellation.reason").value("CHANGED_MIND"));
+
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(10);
+        }
+
+        @Test
+        void clienteNaoCancelaAPartirDoProntoParaColeta() throws Exception {
+            long order = placeOrder(ana, stockA);
+            for (String next : new String[]{"CONFIRMED", "PREPARING", "READY_FOR_PICKUP"}) {
+                advance(order, next).andExpect(status().isOk());
+            }
+
+            cancel(ana, order, "CHANGED_MIND")
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.message").value(
+                            "O pedido não pode mais ser cancelado; ele está READY_FOR_PICKUP"));
+
+            assertThat(orderStatus(order)).isEqualTo("READY_FOR_PICKUP");
+            assertThat(fx.stockQuantity(stockA)).isEqualTo(9);
+        }
+
+        @Test
+        void cancelamentoExigeMotivo() throws Exception {
+            long order = placeOrder(ana, stockA);
+
+            mvc.perform(as(ana, post("/orders/" + order + "/cancel")).content("{}"))
+                    .andExpect(status().isBadRequest());
+
+            assertThat(orderStatus(order)).isEqualTo("AWAITING_ACCEPTANCE");
+        }
+
+        @Test
+        void canceladoEEntregueSaoFinais() throws Exception {
+            long cancelado = placeOrder(ana, stockA);
+            cancel(ana, cancelado, "OTHER").andExpect(status().isOk());
+
+            advance(cancelado, "CONFIRMED").andExpect(status().isUnprocessableContent());
+            reject(cancelado, "STORE_CLOSED").andExpect(status().isUnprocessableContent());
+            cancel(ana, cancelado, "OTHER").andExpect(status().isUnprocessableContent());
+            assertThat(fx.stockQuantity(stockA)).as("estoque devolvido uma única vez").isEqualTo(10);
+
+            long entregue = placeOrder(bruno, stockA);
+            for (String next : new String[]{"CONFIRMED", "PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED"}) {
+                advance(entregue, next).andExpect(status().isOk());
+            }
+            advance(entregue, "DELIVERED")
+                    .andExpect(status().isUnprocessableContent())
+                    .andExpect(jsonPath("$.message").value("O pedido está DELIVERED e não pode mais ser alterado"));
+            cancel(bruno, entregue, "OTHER").andExpect(status().isUnprocessableContent());
+
+            assertThat(orderStatus(cancelado)).isEqualTo("CANCELED");
+            assertThat(orderStatus(entregue)).isEqualTo("DELIVERED");
+        }
+
+        private ResultActions advance(long order, String next) throws Exception {
+            return mvc.perform(asOwner(shopA, patch("/store/orders/" + order + "/status"))
+                    .content("{\"status\": \"" + next + "\"}"));
+        }
+
+        private ResultActions reject(long order, String reason) throws Exception {
+            return mvc.perform(asOwner(shopA, post("/store/orders/" + order + "/reject"))
+                    .content("{\"reason\": \"" + reason + "\"}"));
+        }
+
+        private ResultActions cancel(long user, long order, String reason)
+                throws Exception {
+            return mvc.perform(as(user, post("/orders/" + order + "/cancel"))
+                    .content("{\"reason\": \"" + reason + "\"}"));
         }
     }
 

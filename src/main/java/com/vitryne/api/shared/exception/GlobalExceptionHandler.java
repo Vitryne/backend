@@ -85,7 +85,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidOrderTransition(
             InvalidOrderStatusTransitionException ex
     ) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(Map.<String, Object>of("message", ex.getMessage()));
     }
 
