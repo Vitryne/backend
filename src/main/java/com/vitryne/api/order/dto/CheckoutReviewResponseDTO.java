@@ -34,7 +34,7 @@ public record CheckoutReviewResponseDTO(
         List<CheckoutReviewItemDTO> items,
         BigDecimal itemsSubtotal,
 
-        @Schema(description = "Frete. Zero no MVP.", example = "0.00")
+        @Schema(description = "Frete fixo por pedido (R$ 10,90 no MVP, configurável no servidor)", example = "10.90")
         BigDecimal shippingAmount,
 
         BigDecimal totalAmount,

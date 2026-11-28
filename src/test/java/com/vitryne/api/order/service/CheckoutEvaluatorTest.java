@@ -19,11 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class CheckoutEvaluatorTest {
 
-    private final CheckoutEvaluator evaluator = new CheckoutEvaluator();
+    private final CheckoutEvaluator evaluator = new CheckoutEvaluator(new ShippingPolicy(new java.math.BigDecimal("10.90")));
     private final Store store = Store.builder().id(1L).name("Loja").build();
 
     @Test
-    void carrinhoValidoDeveCalcularValoresComFreteZeroEGerarToken() {
+    void carrinhoValidoDeveCalcularValoresComFreteFixoEGerarToken() {
         Product product = product(1L, "19.90", "ACTIVE", store);
         Cart cart = cart(line(10L, stock(101L, product, "P", 5), 2, "19.90"));
 
@@ -32,10 +32,23 @@ class CheckoutEvaluatorTest {
         assertThat(result.canConfirm()).isTrue();
         assertThat(result.issues()).isEmpty();
         assertThat(result.itemsSubtotal()).isEqualByComparingTo("39.80");
-        assertThat(result.shippingAmount()).isEqualByComparingTo("0.00");
-        assertThat(result.totalAmount()).isEqualByComparingTo("39.80");
+        assertThat(result.shippingAmount()).isEqualByComparingTo("10.90");
+        assertThat(result.totalAmount()).isEqualByComparingTo("50.70");
         assertThat(result.reviewToken()).hasSize(64);
         assertThat(result.lines().getFirst().status()).isEqualTo(ReviewItemStatus.OK);
+    }
+
+    @Test
+    void mudancaNoFreteGeraOutroTokenParaOCheckoutRecusarARevisaoAntiga() {
+        Product product = product(1L, "19.90", "ACTIVE", store);
+        Cart cart = cart(line(10L, stock(101L, product, "P", 5), 2, "19.90"));
+        CheckoutEvaluator freteNovo = new CheckoutEvaluator(new ShippingPolicy(new BigDecimal("12.00")));
+
+        CheckoutEvaluator.Evaluation antes = evaluator.evaluate(cart, address());
+        CheckoutEvaluator.Evaluation depois = freteNovo.evaluate(cart, address());
+
+        assertThat(depois.totalAmount()).isEqualByComparingTo("51.80");
+        assertThat(depois.reviewToken()).isNotEqualTo(antes.reviewToken());
     }
 
     @Test
@@ -46,7 +59,7 @@ class CheckoutEvaluatorTest {
         CheckoutEvaluator.Evaluation result = evaluator.evaluate(cart, address());
 
         assertThat(result.canConfirm()).isTrue();
-        assertThat(result.totalAmount()).isEqualByComparingTo("39.80");
+        assertThat(result.totalAmount()).isEqualByComparingTo("50.70");
         assertThat(result.lines().getFirst().status()).isEqualTo(ReviewItemStatus.PRICE_CHANGED);
         assertThat(result.issues()).singleElement().satisfies(issue -> {
             assertThat(issue.type()).isEqualTo(ReviewIssueType.PRICE_CHANGED);

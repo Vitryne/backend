@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.Spy;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -52,6 +53,10 @@ class CartServiceTest {
 
     @Mock
     private StockRepository stockRepository;
+
+    @Spy
+    private com.vitryne.api.order.service.ShippingPolicy shippingPolicy =
+            new com.vitryne.api.order.service.ShippingPolicy(new BigDecimal("10.90"));
 
     @InjectMocks
     private CartService service;
@@ -89,6 +94,8 @@ class CartServiceTest {
         assertThat(dto.unitPrice()).isEqualByComparingTo("19.90");
         assertThat(dto.subtotal()).isEqualByComparingTo("39.80");
         assertThat(response.totalValueForecast()).isEqualByComparingTo("39.80");
+        assertThat(response.shippingAmount()).isEqualByComparingTo("10.90");
+        assertThat(response.totalAmount()).isEqualByComparingTo("50.70");
 
         assertThat(stock.getQuantity()).isEqualTo(8);
     }
@@ -294,6 +301,8 @@ class CartServiceTest {
         assertThat(dto.unitPrice()).isEqualByComparingTo("19.90");
         assertThat(dto.subtotal()).isEqualByComparingTo("39.80");
         assertThat(response.totalValueForecast()).isEqualByComparingTo("39.80");
+        assertThat(response.shippingAmount()).isEqualByComparingTo("10.90");
+        assertThat(response.totalAmount()).isEqualByComparingTo("50.70");
 
         verifyNoInteractions(stockRepository);
         verify(cartRepository, never()).saveAndFlush(any());
@@ -310,6 +319,8 @@ class CartServiceTest {
         assertThat(response.updatedAt()).isNull();
         assertThat(response.items()).isEmpty();
         assertThat(response.totalValueForecast()).isEqualByComparingTo("0.00");
+        assertThat(response.shippingAmount()).isEqualByComparingTo("0.00");
+        assertThat(response.totalAmount()).isEqualByComparingTo("0.00");
         verify(cartRepository).findByUserId(USER_ID);
         verifyNoMoreInteractions(cartRepository);
     }

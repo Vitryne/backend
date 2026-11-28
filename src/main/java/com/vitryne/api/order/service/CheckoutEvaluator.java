@@ -32,12 +32,15 @@ import java.util.regex.Pattern;
 @Component
 public class CheckoutEvaluator {
 
-    /** Frete fixo do MVP. */
-    static final BigDecimal MVP_SHIPPING = new BigDecimal("0.00");
-
     private static final BigDecimal ZERO_MONEY = new BigDecimal("0.00");
     private static final int MAX_INTEGER_DIGITS = 10;
     private static final Pattern ZIP_CODE = Pattern.compile("\\d{8}");
+
+    private final ShippingPolicy shippingPolicy;
+
+    public CheckoutEvaluator(ShippingPolicy shippingPolicy) {
+        this.shippingPolicy = shippingPolicy;
+    }
 
     public Evaluation evaluate(Cart cart, Address deliveryAddress) {
         List<Issue> issues = new ArrayList<>();
@@ -64,7 +67,8 @@ public class CheckoutEvaluator {
         BigDecimal itemsSubtotal = lines.stream()
                 .map(Line::subtotal)
                 .reduce(ZERO_MONEY, BigDecimal::add);
-        BigDecimal total = itemsSubtotal.add(MVP_SHIPPING);
+        BigDecimal shipping = shippingPolicy.shippingFor(!lines.isEmpty());
+        BigDecimal total = itemsSubtotal.add(shipping);
 
         if (total.precision() - total.scale() > MAX_INTEGER_DIGITS) {
             throw new ResponseStatusException(
@@ -75,11 +79,11 @@ public class CheckoutEvaluator {
 
         boolean canConfirm = issues.stream().noneMatch(issue -> issue.type().isBlocking());
         String token = canConfirm
-                ? reviewToken(store, validAddress, lines, MVP_SHIPPING, total)
+                ? reviewToken(store, validAddress, lines, shipping, total)
                 : null;
 
         return new Evaluation(
-                store, validAddress, lines, itemsSubtotal, MVP_SHIPPING, total,
+                store, validAddress, lines, itemsSubtotal, shipping, total,
                 List.copyOf(issues), canConfirm, token
         );
     }
