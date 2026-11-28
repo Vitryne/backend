@@ -35,9 +35,10 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             @Param("productIds") Collection<Long> productIds
     );
 
-    @EntityGraph(attributePaths = "stocks")
+    /** Catálogo do app: estoques e loja na mesma consulta, sem busca por produto. */
+    @EntityGraph(attributePaths = {"stocks", "store"})
     List<Product> findAllByStatus(String status);
 
-    @EntityGraph(attributePaths = "stocks")
+    @EntityGraph(attributePaths = {"stocks", "store"})
     Optional<Product> findByIdAndStatus(Long id, String status);
 }

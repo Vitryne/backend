@@ -37,6 +37,8 @@ public class ProductController {
                     Quando não houver produtos ativos, retorna uma lista vazia.
 
                     O app deve utilizar finalPrice como preço vigente.
+                    Cada produto traz a loja (store.id e store.name); compare com
+                    o store do carrinho para avisar antes de adicionar produto de outra loja.
                     """
     )
     @ApiResponse(
@@ -67,6 +69,8 @@ public class ProductController {
 
                     Tamanhos sem estoque continuam na resposta,
                     com available igual a false.
+
+                    store traz o id e o nome da loja que vende o produto.
 
                     Um produto ativo esgotado retorna 200.
                     Produto inexistente ou inativo retorna 404.

@@ -16,6 +16,7 @@ import com.vitryne.api.shared.exception.StockUnavailableException;
 import com.vitryne.api.shared.exception.UnavailableQuantityException;
 import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.stock.repository.StockRepository;
+import com.vitryne.api.store.dto.StoreSummaryDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -251,6 +252,9 @@ public class CartService {
         return CartResponseDTO.builder()
                 .id(cart.getId())
                 .userId(cart.getUserId())
+                .store(cart.getItems().isEmpty()
+                        ? null
+                        : StoreSummaryDTO.from(cart.getItems().getFirst().getStock().getProduct().getStore()))
                 .totalValueForecast(cart.getTotalValueForecast())
                 .updatedAt(cart.getUpdatedAt())
                 .items(items)
