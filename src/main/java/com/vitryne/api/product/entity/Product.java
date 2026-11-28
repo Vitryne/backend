@@ -7,6 +7,7 @@ import com.vitryne.api.store.entity.Store;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -82,6 +83,7 @@ public class  Product {
             mappedBy = "product",
             cascade = {CascadeType.PERSIST, CascadeType.MERGE}
     )
+    @BatchSize(size = 50)
     private List<Stock> stocks = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

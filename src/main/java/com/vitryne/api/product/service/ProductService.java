@@ -6,6 +6,9 @@ import com.vitryne.api.product.dto.*;
 import com.vitryne.api.product.exception.ProductHasOrdersException;
 import com.vitryne.api.product.exception.ProductDontBelongToStoreException;
 import com.vitryne.api.shared.dto.AvailableSizeDTO;
+import com.vitryne.api.shared.dto.PageResponseDTO;
+import com.vitryne.api.shared.pagination.Pagination;
+import org.springframework.data.domain.Sort;
 import com.vitryne.api.product.entity.Product;
 import com.vitryne.api.shared.exception.NoProductsInThatStoreException;
 import com.vitryne.api.shared.exception.ProductNotFoundException;
@@ -29,6 +32,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 @Service
 public class ProductService {
+
+    /** Catálogo do app: mais recentes primeiro; id desempata produtos criados no mesmo instante. */
+    private static final Sort NEWEST_FIRST = Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
 
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
@@ -173,12 +179,11 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductClientResponseDTO> listProducts() {
-        return productRepository.findAllByStatus("ACTIVE")
-                .stream()
-                .sorted(Comparator.comparing(Product::getId).reversed())
-                .map(this::toClientResponseDTO)
-                .toList();
+    public PageResponseDTO<ProductClientResponseDTO> listProducts(int page, int size) {
+        return PageResponseDTO.from(
+                productRepository.findByStatus("ACTIVE", Pagination.of(page, size, NEWEST_FIRST)),
+                this::toClientResponseDTO
+        );
     }
 
     @Transactional(readOnly = true)

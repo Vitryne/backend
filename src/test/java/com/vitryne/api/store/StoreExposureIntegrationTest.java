@@ -62,10 +62,10 @@ class StoreExposureIntegrationTest extends PostgresIntegrationTest {
     void catalogoRetornaALojaDeCadaProduto() throws Exception {
         mvc.perform(get("/product"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.id == " + productA + ")].store.id").value(contains((int) shopA.storeId())))
-                .andExpect(jsonPath("$[?(@.id == " + productA + ")].store.name").value(contains(storeName(shopA))))
-                .andExpect(jsonPath("$[?(@.id == " + productB + ")].store.id").value(contains((int) shopB.storeId())))
-                .andExpect(jsonPath("$[?(@.id == " + productB + ")].store.name").value(contains(storeName(shopB))));
+                .andExpect(jsonPath("$.content[?(@.id == " + productA + ")].store.id").value(contains((int) shopA.storeId())))
+                .andExpect(jsonPath("$.content[?(@.id == " + productA + ")].store.name").value(contains(storeName(shopA))))
+                .andExpect(jsonPath("$.content[?(@.id == " + productB + ")].store.id").value(contains((int) shopB.storeId())))
+                .andExpect(jsonPath("$.content[?(@.id == " + productB + ")].store.name").value(contains(storeName(shopB))));
     }
 
     @Test
