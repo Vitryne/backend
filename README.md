@@ -272,6 +272,16 @@ Os cadastros de cliente e lojista possuem contratos distintos. O cadastro de um 
 - Cada loja traz nome, descrição, categoria principal, raio de entrega, tempo de preparo, foto, banner, tags, horários de funcionamento e `isOpen` (aberta agora, no horário de Brasília).
 - Não traz CNPJ, razão social, telefone, endereço nem dados bancários.
 
+### Catálogo de produtos
+
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| GET | `/product` | Produtos ativos para a vitrine do app (público, sem token) |
+
+- Lista paginada (`page` a partir de 0 e `size` de 1 a 50, padrão 20), dos mais recentes para os mais antigos.
+- Resposta no formato `{ content, page, size, totalElements, totalPages }`, igual a `GET /stores`.
+- Produtos esgotados aparecem com `availableProduct` igual a `false`.
+
 ### Fotos de produto
 
 | Método | Endpoint | Descrição |

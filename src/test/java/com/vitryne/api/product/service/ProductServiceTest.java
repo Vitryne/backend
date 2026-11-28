@@ -17,6 +17,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -233,12 +235,13 @@ class ProductServiceTest {
 
     @Test
     void deveConsultarSomenteAtivosNoCatalogoPublico() {
-        when(productRepository.findAllByStatus("ACTIVE"))
-                .thenReturn(List.of(product()));
+        when(productRepository.findByStatus(eq("ACTIVE"), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(
+                        List.of(product()), inv.getArgument(1), 1));
 
-        assertThat(service.listProducts()).hasSize(1);
+        assertThat(service.listProducts(0, 20).content()).hasSize(1);
 
-        verify(productRepository).findAllByStatus("ACTIVE");
+        verify(productRepository).findByStatus(eq("ACTIVE"), any(Pageable.class));
         verify(productRepository, never()).findAll();
     }
 

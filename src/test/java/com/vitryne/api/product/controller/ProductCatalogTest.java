@@ -10,8 +10,12 @@ import com.vitryne.api.store.repository.StoreRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -21,7 +25,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -62,33 +69,64 @@ class ProductCatalogTest {
         Product esgotado = produto(20L);
         tamanho(esgotado, 201L, "M", 0);
 
-        when(productRepository.findAllByStatus("ACTIVE"))
-                .thenReturn(List.of(disponivel, esgotado));
+        when(productRepository.findByStatus(eq("ACTIVE"), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(List.of(esgotado, disponivel), inv.getArgument(1), 2));
 
         mvc.perform(get("/product"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].id").value(20))
-                .andExpect(jsonPath("$[0].availableProduct").value(false))
-                .andExpect(jsonPath("$[1].id").value(10))
-                .andExpect(jsonPath("$[1].availableProduct").value(true))
-                .andExpect(jsonPath("$[1].finalPrice").value(100.0))
-                .andExpect(jsonPath("$[1].photoUrls[0]")
-                        .value("https://example.com/frente.jpg"));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].id").value(20))
+                .andExpect(jsonPath("$.content[0].availableProduct").value(false))
+                .andExpect(jsonPath("$.content[1].id").value(10))
+                .andExpect(jsonPath("$.content[1].availableProduct").value(true))
+                .andExpect(jsonPath("$.content[1].finalPrice").value(100.0))
+                .andExpect(jsonPath("$.content[1].photoUrls[0]")
+                        .value("https://example.com/frente.jpg"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
 
-        verify(productRepository).findAllByStatus("ACTIVE");
         verify(productRepository, never()).findAll();
     }
 
     @Test
-    void homeSemProdutosAtivosDeveRetornarArrayVazio() throws Exception {
-        when(productRepository.findAllByStatus("ACTIVE"))
-                .thenReturn(List.of());
+    void homeDevePedirAPaginaAoBancoDosMaisRecentesParaOsMaisAntigos() throws Exception {
+        when(productRepository.findByStatus(eq("ACTIVE"), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(List.of(), inv.getArgument(1), 0));
+
+        mvc.perform(get("/product").param("page", "2").param("size", "5"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
+        verify(productRepository).findByStatus(eq("ACTIVE"), pageable.capture());
+        assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(pageable.getValue().getPageSize()).isEqualTo(5);
+        assertThat(pageable.getValue().getSort()).containsExactly(
+                Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+    }
+
+    @Test
+    void homeComPaginacaoInvalidaDeveRetornar400SemConsultarOBanco() throws Exception {
+        for (String[] params : new String[][]{{"-1", "20"}, {"0", "0"}, {"0", "51"}}) {
+            mvc.perform(get("/product").param("page", params[0]).param("size", params[1]))
+                    .andExpect(status().isBadRequest());
+        }
+
+        verify(productRepository, never()).findByStatus(any(), any());
+    }
+
+    @Test
+    void homeSemProdutosAtivosDeveRetornarPaginaVazia() throws Exception {
+        when(productRepository.findByStatus(eq("ACTIVE"), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(List.of(), inv.getArgument(1), 0));
 
         mvc.perform(get("/product"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
     }
 
     @Test
