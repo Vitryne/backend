@@ -480,6 +480,7 @@ class OrderServiceTest {
         assertThat(response.cancellation().reason()).isEqualTo("ITEM_UNAVAILABLE");
         assertThat(p.getQuantity()).isEqualTo(5);
         assertThat(m.getQuantity()).isEqualTo(1);
+        verificaEventoDeAtualizacao(response);
     }
 
     @Test
@@ -497,6 +498,7 @@ class OrderServiceTest {
         assertThat(p.getQuantity()).isEqualTo(3);
         verifyNoInteractions(stockRepository);
         verify(orderRepository, never()).saveAndFlush(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
@@ -520,6 +522,7 @@ class OrderServiceTest {
         var inOrder = inOrder(orderRepository);
         inOrder.verify(orderRepository).lockByIdAndUserId(5L, USER_ID);
         inOrder.verify(orderRepository).findByIdAndUserId(5L, USER_ID);
+        verificaEventoDeAtualizacao(response);
     }
 
     @Test
@@ -533,7 +536,36 @@ class OrderServiceTest {
         verifyNoInteractions(stockRepository);
     }
 
+    @Test
+    void expiracaoSemAceiteDevolveEstoqueEPublicaAtualizacao() {
+        Stock p = stock(STOCK_P, product(1L, "19.90", "ACTIVE"), "P", 0);
+        Order order = Order.place(USER_ID, store,
+                new Payment(USER_ID, new BigDecimal("10.00"), PaymentMethod.PIX, PaymentResult.APPROVED),
+                CheckoutEvaluatorTest.address(), new BigDecimal("0.00"), Instant.now().minusSeconds(60));
+        ReflectionTestUtils.setField(order, "id", 5L);
+        order.addItem(p, 2, new BigDecimal("19.90"));
+        when(orderRepository.lockNextOverdueAcceptance(any())).thenReturn(Optional.of(5L));
+        when(orderRepository.findWithDetailsById(5L)).thenReturn(Optional.of(order));
+        when(orderRepository.saveAndFlush(order)).thenReturn(order);
+        estoqueDoPedido(p);
+
+        assertThat(service.expireNextOverdueAcceptance()).contains(5L);
+
+        ArgumentCaptor<OrderChangedEvent> event = ArgumentCaptor.forClass(OrderChangedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(OrderChangedEvent.Type.ORDER_UPDATED);
+        assertThat(event.getValue().order().status()).isEqualTo(OrderStatus.CANCELED);
+        assertThat(event.getValue().order().cancellation().canceledBy()).isEqualTo(CanceledBy.SYSTEM);
+    }
+
     // ---------- apoio ----------
+
+    private void verificaEventoDeAtualizacao(OrderResponseDTO response) {
+        ArgumentCaptor<OrderChangedEvent> event = ArgumentCaptor.forClass(OrderChangedEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().type()).isEqualTo(OrderChangedEvent.Type.ORDER_UPDATED);
+        assertThat(event.getValue().order()).isSameAs(response);
+    }
 
     private Order pedido() {
         Order order = Order.place(USER_ID, store,
