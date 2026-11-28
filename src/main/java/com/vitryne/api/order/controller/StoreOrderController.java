@@ -79,6 +79,7 @@ public class StoreOrderController {
                     AWAITING_ACCEPTANCE → CONFIRMED → PREPARING → READY_FOR_PICKUP → OUT_FOR_DELIVERY → DELIVERED.
 
                     Para aceitar um pedido novo, envie CONFIRMED. Para recusá-lo, use POST /store/orders/{orderId}/reject.
+                    O pedido não aceito até acceptanceDeadline é cancelado pela rotina automática (roda a cada minuto); depois disso, o aceite retorna 422.
                     Enquanto não há entregador, a própria loja informa OUT_FOR_DELIVERY e DELIVERED.
                     Pular, repetir ou voltar etapa, ou alterar pedido DELIVERED ou CANCELED, retorna 422.
                     """,

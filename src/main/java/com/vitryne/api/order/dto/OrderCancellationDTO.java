@@ -11,7 +11,8 @@ public record OrderCancellationDTO(
         CanceledBy canceledBy,
         @Schema(description = """
                 Código do motivo. Com canceledBy STORE, um valor de StoreRejectionReason;
-                com CLIENT, um valor de ClientCancellationReason.
+                com CLIENT, um valor de ClientCancellationReason; com SYSTEM,
+                ACCEPTANCE_TIMEOUT (não aceito no prazo).
                 """, example = "ITEM_UNAVAILABLE")
         String reason,
         Instant canceledAt
