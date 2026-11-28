@@ -20,6 +20,7 @@ public record OrderResponseDTO(
         DeliveryAddressDTO deliveryAddress,
         PaymentResponseDTO payment,
         List<OrderItemResponseDTO> items,
+        OrderCancellationDTO cancellation,
         Instant createdAt,
         Instant updatedAt
 ) {
@@ -36,6 +37,7 @@ public record OrderResponseDTO(
                 DeliveryAddressDTO.from(order.getDeliveryAddress()),
                 PaymentResponseDTO.from(order.getPayment()),
                 order.getItems().stream().map(OrderItemResponseDTO::from).toList(),
+                OrderCancellationDTO.from(order),
                 order.getCreatedAt(),
                 order.getUpdatedAt()
         );

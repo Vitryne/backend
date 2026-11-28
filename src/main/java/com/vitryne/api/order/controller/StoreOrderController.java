@@ -1,6 +1,7 @@
 package com.vitryne.api.order.controller;
 
 import com.vitryne.api.order.dto.OrderResponseDTO;
+import com.vitryne.api.order.dto.RejectOrderRequestDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.service.OrderService;
 import com.vitryne.api.order.stream.OrderStreamService;
@@ -87,15 +88,22 @@ public class StoreOrderController {
     @PatchMapping("/{orderId}/status")
     @Operation(
             operationId = "updateStoreOrderStatus",
-            summary = "Atualizar status do pedido",
-            description = "No MVP, a única transição permitida é CONFIRMED → PREPARING.",
+            summary = "Aceitar ou avançar o pedido",
+            description = """
+                    Avança o pedido uma etapa por vez:
+                    AWAITING_ACCEPTANCE → CONFIRMED → PREPARING → READY_FOR_PICKUP → OUT_FOR_DELIVERY → DELIVERED.
+
+                    Para aceitar um pedido novo, envie CONFIRMED. Para recusá-lo, use POST /store/orders/{orderId}/reject.
+                    Enquanto não há entregador, a própria loja informa OUT_FOR_DELIVERY e DELIVERED.
+                    Pular, repetir ou voltar etapa, ou alterar pedido DELIVERED ou CANCELED, retorna 422.
+                    """,
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     required = true,
                     content = @Content(
                             mediaType = "application/json",
                             schema = @Schema(implementation = UpdateOrderStatusRequestDTO.class),
                             examples = @ExampleObject(value = """
-                                    {"status": "PREPARING"}
+                                    {"status": "CONFIRMED"}
                                     """)
                     )
             )
@@ -105,7 +113,7 @@ public class StoreOrderController {
             @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos", content = @Content),
             @ApiResponse(responseCode = "404", description = "Pedido não encontrado para esta loja",
                     content = @Content),
-            @ApiResponse(responseCode = "409", description = "Transição de status não permitida",
+            @ApiResponse(responseCode = "422", description = "Transição de status não permitida",
                     content = @Content)
     })
     public ResponseEntity<OrderResponseDTO> updateStatus(
@@ -116,5 +124,43 @@ public class StoreOrderController {
         return ResponseEntity.ok(
                 orderService.updateStatus(AuthenticatedUser.id(jwt), orderId, request)
         );
+    }
+
+    @PostMapping("/{orderId}/reject")
+    @Operation(
+            operationId = "rejectStoreOrder",
+            summary = "Recusar um pedido",
+            description = """
+                    Recusa um pedido AWAITING_ACCEPTANCE, que passa para CANCELED.
+                    A justificativa é obrigatória e vem de uma lista fixa.
+                    As quantidades voltam ao estoque e o pedido registra quem cancelou, o motivo e a data.
+                    Depois do aceite a loja não pode mais recusar (422).
+                    O estorno do pagamento simulado não é feito nesta versão.
+                    """,
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = RejectOrderRequestDTO.class),
+                            examples = @ExampleObject(value = """
+                                    {"reason": "ITEM_UNAVAILABLE"}
+                                    """)
+                    )
+            )
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Pedido recusado", useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "400", description = "Justificativa ausente ou inválida", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Pedido não encontrado para esta loja",
+                    content = @Content),
+            @ApiResponse(responseCode = "422", description = "O pedido não está aguardando aceite",
+                    content = @Content)
+    })
+    public ResponseEntity<OrderResponseDTO> reject(
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "ID do pedido", example = "1") @PathVariable("orderId") Long orderId,
+            @Valid @RequestBody RejectOrderRequestDTO request
+    ) {
+        return ResponseEntity.ok(orderService.rejectByStore(AuthenticatedUser.id(jwt), orderId, request));
     }
 }

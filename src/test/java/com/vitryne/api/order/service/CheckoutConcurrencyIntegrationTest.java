@@ -3,17 +3,15 @@ package com.vitryne.api.order.service;
 import com.vitryne.api.order.dto.CheckoutRequestDTO;
 import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.payment.enums.PaymentMethod;
+import com.vitryne.api.support.PostgresIntegrationTest;
+import com.vitryne.api.support.PurchaseFixtures;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.server.ResponseStatusException;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +22,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,24 +30,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Checkout contra Postgres real: locks, transação e restrições do banco
  * não aparecem nos testes com mocks.
  */
-@Testcontainers
-@SpringBootTest(properties = {
-        "jwt.public.key=classpath:keys/dev/public.pem",
-        "jwt.private.key=classpath:keys/dev/private.pem"
-})
-class CheckoutConcurrencyIntegrationTest {
-
-    @Container
-    @ServiceConnection
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:15-alpine");
-
-    private static final AtomicLong SEQ = new AtomicLong(System.nanoTime() % 1_000_000);
+class CheckoutConcurrencyIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private OrderService orderService;
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    private PurchaseFixtures fixtures;
+
+    @BeforeEach
+    void setUp() {
+        fixtures = new PurchaseFixtures(jdbc);
+    }
 
     @Test
     void doisClientesComprandoAUltimaUnidadeGeramUmUnicoPedidoSemEstoqueNegativo() throws Exception {
@@ -200,60 +193,22 @@ class CheckoutConcurrencyIntegrationTest {
     }
 
     private long stockWithQuantity(int quantity) {
-        long n = SEQ.incrementAndGet();
-        long owner = insertUser("lojista" + n + "@teste.com", "STORE");
-        long store = jdbc.queryForObject(
-                "INSERT INTO store (owner_id, name) VALUES (?, ?) RETURNING id", Long.class, owner, "Loja " + n
-        );
-        long product = jdbc.queryForObject("""
-                INSERT INTO product (name, price, type, status, store_id, updated_at)
-                VALUES (?, 19.90, 'CAMISETA', 'ACTIVE', ?, now()) RETURNING id
-                """, Long.class, "Camiseta " + n, store);
-        return jdbc.queryForObject("""
-                INSERT INTO stock (product_id, size, quantity, created_at, updated_at)
-                VALUES (?, 'M', ?, now(), now()) RETURNING id
-                """, Long.class, product, quantity);
+        return fixtures.stock(quantity);
     }
 
     private long consumerWithCart(long stockId, int quantity) {
-        long n = SEQ.incrementAndGet();
-        long user = insertUser("cliente" + n + "@teste.com", "CONSUMER");
-        long client = jdbc.queryForObject(
-                "INSERT INTO client (user_id, name, cpf) VALUES (?, 'Cliente', ?) RETURNING id",
-                Long.class, user, String.format("%011d", n)
-        );
-        long address = jdbc.queryForObject("""
-                INSERT INTO client_address (client_id, zip_code, street, address_number, neighborhood, city, state)
-                VALUES (?, '87000000', 'Rua A', '10', 'Centro', 'Maringá', 'PR') RETURNING id
-                """, Long.class, client);
-        jdbc.update("UPDATE client SET selected_address_id = ? WHERE id = ?", address, client);
-        long cart = jdbc.queryForObject(
-                "INSERT INTO cart (user_id, total_value_forecast) VALUES (?, ?) RETURNING id",
-                Long.class, user, 19.90 * quantity
-        );
-        jdbc.update(
-                "INSERT INTO cart_item (cart_id, stock_id, quantity, unit_price) VALUES (?, ?, ?, 19.90)",
-                cart, stockId, quantity
-        );
-        return user;
-    }
-
-    private long insertUser(String email, String role) {
-        return jdbc.queryForObject(
-                "INSERT INTO users (email, password_hash, role) VALUES (?, 'x', ?) RETURNING id",
-                Long.class, email, role
-        );
+        return fixtures.consumerWithCart(stockId, quantity);
     }
 
     private int stockQuantity(long stockId) {
-        return jdbc.queryForObject("SELECT quantity FROM stock WHERE id = ?", Integer.class, stockId);
+        return fixtures.stockQuantity(stockId);
     }
 
     private int cartItems(long userId) {
-        return count("SELECT count(*) FROM cart_item ci JOIN cart c ON c.id = ci.cart_id WHERE c.user_id = ?", userId);
+        return fixtures.cartItems(userId);
     }
 
     private int count(String sql, Object... args) {
-        return jdbc.queryForObject(sql, Integer.class, args);
+        return fixtures.count(sql, args);
     }
 }

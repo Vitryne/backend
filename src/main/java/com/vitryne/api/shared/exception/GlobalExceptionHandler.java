@@ -54,6 +54,27 @@ public class GlobalExceptionHandler {
                 .body(Map.<String, Object>of("message", ex.getMessage()));
     }
 
+    /** Item, carrinho ou estoque inexistentes, ou fora do carrinho do cliente autenticado. */
+    @ExceptionHandler({CartItemNotFoundException.class, CartNotFoundException.class,
+            StockNotFoundException.class})
+    public ResponseEntity<Map<String, Object>> handleCartNotFound(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
+    /** Quantidade acima do disponível ou tamanho esgotado. */
+    @ExceptionHandler({UnavailableQuantityException.class, StockUnavailableException.class})
+    public ResponseEntity<Map<String, Object>> handleCartStockConflict(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidQuantityException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidQuantity(InvalidQuantityException ex) {
+        return ResponseEntity.badRequest()
+                .body(Map.<String, Object>of("message", ex.getMessage()));
+    }
+
     @ExceptionHandler(OrderNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleOrderNotFound(OrderNotFoundException ex) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -64,7 +85,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidOrderTransition(
             InvalidOrderStatusTransitionException ex
     ) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
                 .body(Map.<String, Object>of("message", ex.getMessage()));
     }
 

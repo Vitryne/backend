@@ -98,7 +98,8 @@ public class CartController {
             @ApiResponse(responseCode = "404", description = "Variação de estoque não encontrada",
                     content = @Content),
             @ApiResponse(responseCode = "409",
-                    description = "Produto inativo ou carrinho com itens de outra loja",
+                    description = "Produto inativo, tamanho esgotado, quantidade acima do estoque "
+                            + "ou carrinho com itens de outra loja",
                     content = @Content)
     })
     public ResponseEntity<CartResponseDTO> addItem(
@@ -136,7 +137,8 @@ public class CartController {
                     content = @Content),
             @ApiResponse(responseCode = "404", description = "Carrinho ou item não encontrado para este cliente",
                     content = @Content),
-            @ApiResponse(responseCode = "409", description = "Produto inativo",
+            @ApiResponse(responseCode = "409",
+                    description = "Produto inativo, tamanho esgotado ou quantidade acima do estoque",
                     content = @Content)
     })
     public ResponseEntity<CartResponseDTO> updateItemQuantity(
