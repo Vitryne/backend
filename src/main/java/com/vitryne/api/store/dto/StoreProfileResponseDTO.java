@@ -13,6 +13,9 @@ public record StoreProfileResponseDTO(
         @Schema(description = "Nome da loja", example = "Loja Centro")
         String name,
 
+        @Schema(description = "E-mail de login do lojista", example = "lojista@exemplo.com")
+        String email,
+
         @Schema(description = "URL da foto da loja; null se não cadastrada")
         String photoUrl,
 

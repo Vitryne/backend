@@ -97,6 +97,7 @@ class MeEndpointsIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(shop.storeId()))
                 .andExpect(jsonPath("$.name").value(storeName(shop)))
+                .andExpect(jsonPath("$.email").value(ownerEmail(shop)))
                 .andExpect(jsonPath("$.photoUrl").value("https://img/loja.png"))
                 .andExpect(jsonPath("$.mainCategory").value("Moda feminina"))
                 .andExpect(jsonPath("$.deliveryRadiusKm").value(5.5))
@@ -130,7 +131,7 @@ class MeEndpointsIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(keys(body)).containsExactlyInAnyOrder(
-                "id", "name", "photoUrl", "address", "mainCategory",
+                "id", "name", "email", "photoUrl", "address", "mainCategory",
                 "deliveryRadiusKm", "preparationTimeMinutes");
         assertThat(body).doesNotContain(String.format("%014d", shop.storeId()), "12345678000199",
                 "99999-9", "pix@loja.com", "Loja LTDA");
@@ -200,5 +201,9 @@ class MeEndpointsIntegrationTest extends PostgresIntegrationTest {
 
     private String storeName(PurchaseFixtures.Shop shop) {
         return jdbc.queryForObject("SELECT name FROM store WHERE id = ?", String.class, shop.storeId());
+    }
+
+    private String ownerEmail(PurchaseFixtures.Shop shop) {
+        return jdbc.queryForObject("SELECT email FROM users WHERE id = ?", String.class, shop.ownerId());
     }
 }
