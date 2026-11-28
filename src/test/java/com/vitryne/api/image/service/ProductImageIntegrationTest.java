@@ -46,6 +46,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "jwt.public.key=classpath:keys/dev/public.pem",
         "jwt.private.key=classpath:keys/dev/private.pem",
         "vitryne.scheduling.enabled=false",
+        // Isola o teste do .env local: o armazenamento usado é o falso, em memória.
+        "vitryne.images.cloudinary-url=",
+        "vitryne.images.folder=vitryne",
         "vitryne.images.orphan-retention=24h"
 })
 class ProductImageIntegrationTest {
