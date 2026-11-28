@@ -3,9 +3,12 @@ package com.vitryne.api.store.entity;
 import com.vitryne.api.address.entity.Address;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.BatchSize;
 import com.vitryne.api.shared.entity.User;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -73,6 +76,7 @@ public class Store {
 
     @Builder.Default
     @ElementCollection
+    @BatchSize(size = 50)
     @CollectionTable(
             name = "store_tag",
             joinColumns = @JoinColumn(name = "store_id")
@@ -82,9 +86,24 @@ public class Store {
 
     @Builder.Default
     @ElementCollection
+    @BatchSize(size = 50)
     @CollectionTable(
             name = "store_opening_period",
             joinColumns = @JoinColumn(name = "store_id")
     )
     private List<StoreOpeningPeriod> openingPeriods = new ArrayList<>();
+
+    /**
+     * Se a loja está dentro de algum período de funcionamento no horário local
+     * informado. A abertura conta como aberta e o fechamento, como fechada.
+     * Sem períodos cadastrados, a loja é considerada fechada.
+     */
+    public boolean isOpenAt(LocalDateTime localDateTime) {
+        LocalTime time = localDateTime.toLocalTime();
+        return openingPeriods.stream().anyMatch(period ->
+                period.getDayOfWeek() == localDateTime.getDayOfWeek()
+                        && !time.isBefore(period.getOpensAt())
+                        && time.isBefore(period.getClosesAt())
+        );
+    }
 }

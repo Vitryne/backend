@@ -80,7 +80,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/product",
-                                "/product/client/*"
+                                "/product/client/*",
+                                "/stores"
                         ).permitAll()
 
                         // Demais operações exigem autenticação.
