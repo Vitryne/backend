@@ -1,6 +1,7 @@
 package com.vitryne.api.product.service;
 
 import com.vitryne.api.cart.repository.CartItemRepository;
+import com.vitryne.api.image.service.ImageService;
 import com.vitryne.api.product.dto.*;
 import com.vitryne.api.product.exception.ProductHasOrdersException;
 import com.vitryne.api.product.exception.ProductDontBelongToStoreException;
@@ -32,6 +33,7 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final StoreRepository storeRepository;
     private final CartItemRepository cartItemRepository;
+    private final ImageService imageService;
 
 
     @Transactional(readOnly = true)
@@ -59,12 +61,15 @@ public class ProductService {
 
         Product savedProduct = productRepository.save(product);
 
+        imageService.syncProductPhotos(savedProduct, request.photoUrls(), List.of());
+
         return toManagementResponseDTO(savedProduct);
     }
 
     @Transactional
     public ProductManagementResponseDTO editProduct(Long id, Long ownerId, EditProductRequestDTO request){
         Product product = findManagedProduct(id, ownerId);
+        List<String> previousPhotoUrls = List.copyOf(product.getPhotoUrls());
 
         product.updateDetails(
                 request.name(),
@@ -75,6 +80,8 @@ public class ProductService {
                 request.stockWarningThreshold(),
                 request.photoUrls()
         );
+
+        imageService.syncProductPhotos(product, request.photoUrls(), previousPhotoUrls);
 
         productRepository.flush();
 
@@ -117,6 +124,7 @@ public class ProductService {
         }
 
         cartItemRepository.deleteByProductIds(uniqueIds);
+        imageService.releaseFromProducts(uniqueIds);
         productRepository.deleteAll(products);
         productRepository.flush();
     }

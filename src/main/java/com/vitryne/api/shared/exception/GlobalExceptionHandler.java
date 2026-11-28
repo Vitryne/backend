@@ -1,5 +1,6 @@
 package com.vitryne.api.shared.exception;
 
+import com.vitryne.api.image.exception.ImageStorageException;
 import com.vitryne.api.order.exception.InvalidOrderStatusTransitionException;
 import com.vitryne.api.order.exception.OrderNotFoundException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -10,6 +11,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -108,6 +111,45 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST,
                 exception.getMessage()
+        );
+        problem.setTitle("Dados inválidos");
+
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleUploadTooLarge(
+            MaxUploadSizeExceededException exception
+    ) {
+        return invalidUpload(
+                "Cada imagem pode ter no máximo 5 MB. Envie imagens menores."
+        );
+    }
+
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ProblemDetail> handleMultipart(MultipartException exception) {
+        return invalidUpload(
+                "Envie as imagens em multipart/form-data, no campo files"
+        );
+    }
+
+    @ExceptionHandler(ImageStorageException.class)
+    public ResponseEntity<ProblemDetail> handleImageStorage(
+            ImageStorageException exception
+    ) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                exception.getStatus(),
+                exception.getMessage()
+        );
+        problem.setTitle("Armazenamento de imagens indisponível");
+
+        return ResponseEntity.status(exception.getStatus()).body(problem);
+    }
+
+    private ResponseEntity<ProblemDetail> invalidUpload(String detail) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                detail
         );
         problem.setTitle("Dados inválidos");
 

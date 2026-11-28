@@ -27,6 +27,7 @@ public record CreateProductRequestDTO(
         Integer stockWarningThreshold,
 
         @NotEmpty
+        @Size(max = 8, message = "O produto pode ter no máximo 8 fotos")
         List<@NotBlank String> photoUrls,
 
         @NotEmpty
