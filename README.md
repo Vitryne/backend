@@ -30,6 +30,7 @@ O projeto está em desenvolvimento. A disponibilidade de cada funcionalidade dep
 - Flyway
 - Springdoc OpenAPI / Swagger UI
 - Docker e Docker Compose
+- Cloudinary (armazenamento das imagens)
 
 ## 🚀 Começando
 
@@ -71,7 +72,32 @@ Edite o `.env` e preencha os valores conforme seu ambiente antes de iniciar a ap
 
 O `.env.example` documenta as variáveis utilizadas pelo projeto. Não versione o `.env` nem credenciais reais.
 
-## 3. Chaves JWT (desenvolvimento)
+| Variável | Obrigatória | Descrição |
+| --- | --- | --- |
+| `KEY_DB_USER`, `KEY_DB_PASSWORD`, `KEY_DB`, `KEY_DB_PORT` | Sim | Acesso ao PostgreSQL |
+| `CLOUDINARY_URL` | Para o upload de imagens | Credencial do Cloudinary. Sem ela a aplicação sobe, mas o upload responde `503` |
+| `CLOUDINARY_FOLDER` | Não | Pasta das imagens no Cloudinary. Padrão: `vitryne` |
+| `IMAGE_ORPHAN_RETENTION` | Não | Por quanto tempo uma imagem enviada e não usada em produto é mantida. Padrão: `24h` |
+| `IMAGE_ORPHAN_CLEANUP_INTERVAL` | Não | Intervalo da limpeza das imagens não usadas. Padrão: `PT1H` |
+
+### 3. Configurar o Cloudinary (upload de imagens)
+
+As fotos dos produtos ficam no [Cloudinary](https://cloudinary.com), e não no disco do servidor. Para usar o upload em desenvolvimento:
+
+1. Crie uma conta gratuita no Cloudinary.
+2. No [console](https://console.cloudinary.com), abra **Settings → API Keys** (ou o bloco de credenciais no Dashboard) e copie a linha **API environment variable**.
+3. Cole no seu `.env`, de preferência com uma pasta separada para desenvolvimento:
+
+```dotenv
+CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+CLOUDINARY_FOLDER=vitryne-dev
+```
+
+> ⚠️ Coloque a credencial só no `.env`, que não é versionado. Este repositório é público: credencial em qualquer arquivo versionado, incluindo o `.env.example`, fica exposta no histórico do Git. Se isso acontecer, gere uma nova chave no Cloudinary.
+
+Sem o `CLOUDINARY_URL`, todo o restante da API funciona normalmente; só o upload de imagens fica indisponível.
+
+### 4. Chaves JWT (desenvolvimento)
 
 O projeto usa um par de chaves RSA para assinar e validar os tokens JWT.
 O repositório inclui um par **exclusivo para desenvolvimento** em
@@ -104,7 +130,7 @@ openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt -in keypair.pem -out src/
 rm keypair.pem
 ```
 
-### 4. Iniciar a aplicação e o banco
+### 5. Iniciar a aplicação e o banco
 
 ```bash
 docker compose up -d --build
@@ -126,7 +152,7 @@ docker compose ps
 
 As migrations do Flyway são executadas automaticamente durante a inicialização da aplicação.
 
-### 5. Acessar a API
+### 6. Acessar a API
 
 Considerando a API publicada na porta `8080`:
 
@@ -231,6 +257,35 @@ Ela pode ser importada em ferramentas como Postman e Insomnia.
 Consulte os exemplos e os campos obrigatórios diretamente no Swagger.
 
 Os cadastros de cliente e lojista possuem contratos distintos. O cadastro de um usuário não equivale à realização de login.
+
+### Fotos de produto
+
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| POST | `/uploads/images` | Envio das fotos (perfil STORE) |
+
+O cadastro de fotos acontece em duas etapas:
+
+1. Envie as imagens em `multipart/form-data`, no campo `files`: de 1 a 8 arquivos JPG, PNG ou WEBP de até 5 MB cada. A resposta traz as URLs públicas na ordem enviada:
+
+```json
+{ "urls": ["https://res.cloudinary.com/.../foto1.jpg", "https://res.cloudinary.com/.../foto2.jpg"] }
+```
+
+2. Use essas URLs no `photoUrls` do cadastro (`POST /product/manager`) ou da edição (`PUT /product/manager/{id}`).
+
+Regras:
+
+- O produto aceita só URLs enviadas pela própria loja por essa rota. URLs externas são recusadas.
+- Cada produto tem no máximo 8 fotos, sem repetição. A primeira do `photoUrls` é a capa.
+- Uma imagem enviada e não usada em nenhum produto é apagada depois de 24 horas. O mesmo vale para as fotos removidas na edição e para as de produtos excluídos.
+- Arquivo inválido ou acima do limite retorna `400`, com a mensagem para exibir ao usuário no campo `detail`.
+
+Exemplo com `curl`:
+
+```bash
+curl -X POST http://localhost:8080/uploads/images   -H "Authorization: Bearer <token do lojista>"   -F "files=@capa.jpg"   -F "files=@verso.png"
+```
 
 ### Integração com web e mobile
 
