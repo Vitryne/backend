@@ -14,6 +14,7 @@ import com.vitryne.api.order.dto.RejectOrderRequestDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
 import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
+import com.vitryne.api.order.event.OrderChangedEvent;
 import com.vitryne.api.order.entity.OrderItem;
 import com.vitryne.api.order.exception.OrderNotFoundException;
 import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
@@ -24,6 +25,7 @@ import com.vitryne.api.payment.service.PaymentSimulator;
 import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.stock.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -61,6 +63,7 @@ public class OrderService {
     private final CheckoutEvaluator checkoutEvaluator;
     private final OrderAcceptancePolicy acceptancePolicy;
     private final CheckoutIdempotencyRepository checkoutIdempotencyRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Revisão da compra antes da confirmação. Somente leitura: não cria pedido,
@@ -187,9 +190,13 @@ public class OrderService {
         cart.setUpdatedAt(LocalDateTime.now());
         cartRepository.saveAndFlush(cart);
 
+        OrderResponseDTO orderResponse = OrderResponseDTO.from(savedOrder);
+        eventPublisher.publishEvent(
+                new OrderChangedEvent(OrderChangedEvent.Type.ORDER_CREATED, orderResponse));
+
         return new CheckoutResponseDTO(
                 PaymentResponseDTO.from(payment),
-                OrderResponseDTO.from(savedOrder),
+                orderResponse,
                 false
         );
     }
@@ -281,7 +288,11 @@ public class OrderService {
 
         order.advanceTo(request.status());
 
-        return OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+        OrderResponseDTO response = OrderResponseDTO.from(orderRepository.saveAndFlush(order));
+        eventPublisher.publishEvent(
+                new OrderChangedEvent(OrderChangedEvent.Type.ORDER_UPDATED, response));
+
+        return response;
     }
 
     /** Recusa da loja, só para pedidos aguardando aceite; devolve o estoque. */
