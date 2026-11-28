@@ -32,7 +32,7 @@ public class StoreProfileController {
             operationId = "getMyStore",
             summary = "Consultar minha loja",
             description = """
-                    Retorna a loja do lojista do token: id, nome, foto, endereço, categoria
+                    Retorna a loja do lojista do token: id, nome, e-mail de login do lojista, foto, endereço, categoria
                     principal, raio de entrega e tempo de preparo. Não recebe id, então só
                     alcança a loja do próprio lojista. Não retorna CNPJ, razão social nem
                     dados bancários.

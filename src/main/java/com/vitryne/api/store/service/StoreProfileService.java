@@ -19,7 +19,7 @@ public class StoreProfileService {
     /** Loja do lojista do token; não há parâmetro de id, então não alcança loja de outro lojista. */
     @Transactional(readOnly = true)
     public StoreProfileResponseDTO me(Long ownerId) {
-        Store store = storeRepository.findByOwnerId(ownerId)
+        Store store = storeRepository.findProfileByOwnerId(ownerId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Loja não encontrada para o usuário autenticado"
@@ -28,6 +28,7 @@ public class StoreProfileService {
         return new StoreProfileResponseDTO(
                 store.getId(),
                 store.getName(),
+                store.getOwner().getEmail(),
                 store.getPhotoUrl(),
                 AddressResponseDTO.from(store.getAddress()),
                 store.getMainCategory(),
