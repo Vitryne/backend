@@ -21,7 +21,9 @@ import java.time.Instant;
  */
 @SpringBootTest(properties = {
         "jwt.public.key=classpath:keys/dev/public.pem",
-        "jwt.private.key=classpath:keys/dev/private.pem"
+        "jwt.private.key=classpath:keys/dev/private.pem",
+        // A rotina de expiração é chamada direto nos testes, sem o agendador.
+        "vitryne.scheduling.enabled=false"
 })
 @AutoConfigureMockMvc
 public abstract class PostgresIntegrationTest {
