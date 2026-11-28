@@ -10,8 +10,10 @@ import com.vitryne.api.order.dto.CheckoutResponseDTO;
 import com.vitryne.api.order.dto.CheckoutReviewResponseDTO;
 import com.vitryne.api.order.dto.OrderResponseDTO;
 import com.vitryne.api.order.dto.UpdateOrderStatusRequestDTO;
+import com.vitryne.api.order.entity.CheckoutIdempotency;
 import com.vitryne.api.order.entity.Order;
 import com.vitryne.api.order.exception.OrderNotFoundException;
+import com.vitryne.api.order.repository.CheckoutIdempotencyRepository;
 import com.vitryne.api.order.repository.OrderRepository;
 import com.vitryne.api.payment.dto.PaymentResponseDTO;
 import com.vitryne.api.payment.entity.Payment;
@@ -25,9 +27,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -35,6 +43,7 @@ import java.util.stream.Collectors;
 public class OrderService {
 
     private static final BigDecimal ZERO_MONEY = new BigDecimal("0.00");
+    private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("[A-Za-z0-9_-]{8,100}");
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
@@ -43,6 +52,7 @@ public class OrderService {
     private final PaymentSimulator paymentSimulator;
     private final ClientAddressService clientAddressService;
     private final CheckoutEvaluator checkoutEvaluator;
+    private final CheckoutIdempotencyRepository checkoutIdempotencyRepository;
 
     /**
      * Revisão da compra antes da confirmação. Somente leitura: não cria pedido,
@@ -69,16 +79,32 @@ public class OrderService {
      * devolvido na revisão; caso contrário o cliente deve revisar de novo.
      * O pagamento simulado é registrado mesmo quando recusado; nesse caso
      * nenhum pedido é criado e carrinho e estoque permanecem inalterados.
+     *
+     * A Idempotency-Key identifica a confirmação dentro do cliente: repetir a
+     * mesma chave com os mesmos dados devolve o resultado já registrado, sem
+     * novo pagamento, pedido ou baixa de estoque. Reutilizá-la com outros
+     * dados é recusado.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public CheckoutResponseDTO checkout(Long userId, CheckoutRequestDTO request) {
-        // Mesmo lock das operações do carrinho: serializa checkout e edições
-        // e impede pedido duplicado por cliques repetidos.
+    public CheckoutResponseDTO checkout(Long userId, String idempotencyKey, CheckoutRequestDTO request) {
+        validateIdempotencyKey(idempotencyKey);
+        String requestHash = requestHash(request);
+
+        // Mesmo lock das operações do carrinho: serializa checkout e edições,
+        // inclusive repetições simultâneas da mesma confirmação.
         cartRepository.lockUserForCartMutation(userId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.UNAUTHORIZED,
                         "Usuário autenticado não encontrado"
                 ));
+
+        // Consultado depois do lock: uma repetição concorrente só chega aqui
+        // quando a primeira já gravou (ou desfez) seu resultado.
+        Optional<CheckoutIdempotency> previous =
+                checkoutIdempotencyRepository.findByUserIdAndIdempotencyKey(userId, idempotencyKey);
+        if (previous.isPresent()) {
+            return replay(previous.get(), requestHash);
+        }
 
         List<Long> stockIds = cartItemRepository.findStockIdsByUserId(userId);
         if (stockIds.isEmpty()) {
@@ -124,8 +150,12 @@ public class OrderService {
                 request.simulatedResult()
         );
 
+        checkoutIdempotencyRepository.save(
+                new CheckoutIdempotency(userId, idempotencyKey, requestHash, payment)
+        );
+
         if (!payment.isApproved()) {
-            return new CheckoutResponseDTO(PaymentResponseDTO.from(payment), null);
+            return new CheckoutResponseDTO(PaymentResponseDTO.from(payment), null, false);
         }
 
         Order order = Order.confirm(
@@ -150,8 +180,54 @@ public class OrderService {
 
         return new CheckoutResponseDTO(
                 PaymentResponseDTO.from(payment),
-                OrderResponseDTO.from(savedOrder)
+                OrderResponseDTO.from(savedOrder),
+                false
         );
+    }
+
+    private CheckoutResponseDTO replay(CheckoutIdempotency previous, String requestHash) {
+        if (!previous.matches(requestHash)) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_CONTENT,
+                    "A Idempotency-Key já foi usada em outra confirmação. "
+                            + "Gere uma nova chave para uma nova tentativa."
+            );
+        }
+
+        Payment payment = previous.getPayment();
+        OrderResponseDTO order = payment.isApproved()
+                ? orderRepository.findByPaymentId(payment.getId())
+                        .map(OrderResponseDTO::from)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "Pagamento aprovado sem pedido: " + payment.getId()))
+                : null;
+
+        return new CheckoutResponseDTO(PaymentResponseDTO.from(payment), order, true);
+    }
+
+    private static void validateIdempotencyKey(String key) {
+        if (key == null || !IDEMPOTENCY_KEY.matcher(key).matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "O header Idempotency-Key é obrigatório e deve ter de 8 a 100 caracteres "
+                            + "(letras, números, - ou _). Use um UUID por confirmação."
+            );
+        }
+    }
+
+    /** Impressão digital do corpo da confirmação; compara repetições da mesma chave. */
+    private static String requestHash(CheckoutRequestDTO request) {
+        String canonical = "v1|token=" + request.reviewToken()
+                + "|method=" + request.paymentMethod()
+                + "|result=" + Objects.toString(request.simulatedResult(), "");
+
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(canonical.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 indisponível", exception);
+        }
     }
 
     @Transactional(readOnly = true)

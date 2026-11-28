@@ -7,6 +7,9 @@ public record CheckoutResponseDTO(
         PaymentResponseDTO payment,
 
         @Schema(description = "Pedido criado. Nulo quando o pagamento é recusado.", nullable = true)
-        OrderResponseDTO order
+        OrderResponseDTO order,
+
+        @Schema(description = "true quando a resposta repete uma confirmação já processada com a mesma Idempotency-Key")
+        boolean replayed
 ) {
 }
