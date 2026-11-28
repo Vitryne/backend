@@ -21,7 +21,17 @@ public record CartResponseDTO(
                 """)
         StoreSummaryDTO store,
 
+        @Schema(description = "Soma dos itens, sem frete", example = "119.80")
         BigDecimal totalValueForecast,
+
+        @Schema(description = """
+                Frete fixo por pedido (R$ 10,90 no MVP, configurável no servidor).
+                Zero quando o carrinho está vazio. A revisão do checkout confirma o valor.
+                """, example = "10.90")
+        BigDecimal shippingAmount,
+
+        @Schema(description = "Total com frete: totalValueForecast + shippingAmount", example = "130.70")
+        BigDecimal totalAmount,
         LocalDateTime updatedAt,
         List<CartItemResponseDTO> items
 ) {

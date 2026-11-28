@@ -61,7 +61,7 @@ public class OrderController {
                     - issues: alterações e problemas encontrados. PRICE_CHANGED apenas informa
                       (o total já usa o preço atual); os demais têm blocking = true.
                     - canConfirm: false quando há problema bloqueante; nesse caso reviewToken é nulo.
-                    - shippingAmount: frete, zero no MVP.
+                    - shippingAmount: frete fixo por pedido (R$ 10,90 no MVP), já somado ao totalAmount.
 
                     Envie o reviewToken em POST /orders/checkout. Se os valores mudarem depois da
                     revisão, o checkout retorna 409 e a revisão deve ser refeita.

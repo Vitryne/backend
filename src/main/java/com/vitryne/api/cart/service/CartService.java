@@ -17,6 +17,7 @@ import com.vitryne.api.shared.exception.UnavailableQuantityException;
 import com.vitryne.api.stock.entity.Stock;
 import com.vitryne.api.stock.repository.StockRepository;
 import com.vitryne.api.store.dto.StoreSummaryDTO;
+import com.vitryne.api.order.service.ShippingPolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class CartService {
 
     private final CartRepository cartRepository;
     private final StockRepository stockRepository;
+    private final ShippingPolicy shippingPolicy;
 
     @Transactional(readOnly = true)
     public CartResponseDTO searchByUser(Long userId) {
@@ -229,8 +231,9 @@ public class CartService {
 
     private CartResponseDTO persist(Cart cart) {
         BigDecimal total = calculateTotal(cart);
+        BigDecimal totalWithShipping = total.add(shippingPolicy.shippingFor(!cart.getItems().isEmpty()));
 
-        if (total.precision() - total.scale() > 10) {
+        if (totalWithShipping.precision() - totalWithShipping.scale() > 10) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "O valor total do carrinho excede o limite permitido"
@@ -249,6 +252,11 @@ public class CartService {
                 .map(this::toItemResponseDTO)
                 .toList();
 
+        BigDecimal itemsTotal = cart.getTotalValueForecast() == null
+                ? ZERO_MONEY
+                : cart.getTotalValueForecast();
+        BigDecimal shipping = shippingPolicy.shippingFor(!cart.getItems().isEmpty());
+
         return CartResponseDTO.builder()
                 .id(cart.getId())
                 .userId(cart.getUserId())
@@ -256,6 +264,8 @@ public class CartService {
                         ? null
                         : StoreSummaryDTO.from(cart.getItems().getFirst().getStock().getProduct().getStore()))
                 .totalValueForecast(cart.getTotalValueForecast())
+                .shippingAmount(shipping)
+                .totalAmount(itemsTotal.add(shipping))
                 .updatedAt(cart.getUpdatedAt())
                 .items(items)
                 .build();

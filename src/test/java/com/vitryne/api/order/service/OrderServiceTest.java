@@ -95,7 +95,7 @@ class OrderServiceTest {
     private ApplicationEventPublisher eventPublisher;
 
     @Spy
-    private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator();
+    private CheckoutEvaluator checkoutEvaluator = new CheckoutEvaluator(new ShippingPolicy(new java.math.BigDecimal("10.90")));
 
     @Spy
     private OrderAcceptancePolicy acceptancePolicy = new OrderAcceptancePolicy(Duration.ofMinutes(30));
@@ -122,8 +122,8 @@ class OrderServiceTest {
         assertThat(review.deliveryAddressId()).isEqualTo(40L);
         assertThat(review.deliveryAddress().city()).isEqualTo("Maringá");
         assertThat(review.itemsSubtotal()).isEqualByComparingTo("39.80");
-        assertThat(review.shippingAmount()).isEqualByComparingTo("0.00");
-        assertThat(review.totalAmount()).isEqualByComparingTo("39.80");
+        assertThat(review.shippingAmount()).isEqualByComparingTo("10.90");
+        assertThat(review.totalAmount()).isEqualByComparingTo("50.70");
         assertThat(review.items().getFirst().cartUnitPrice()).isEqualByComparingTo("25.00");
         assertThat(review.items().getFirst().currentUnitPrice()).isEqualByComparingTo("19.90");
         assertThat(review.items().getFirst().availableQuantity()).isEqualTo(5);
@@ -182,7 +182,7 @@ class OrderServiceTest {
         );
 
         verify(paymentSimulator).process(
-                eq(USER_ID), argThat(v -> v.compareTo(new BigDecimal("59.70")) == 0),
+                eq(USER_ID), argThat(v -> v.compareTo(new BigDecimal("70.60")) == 0),
                 eq(PaymentMethod.CREDIT_CARD), isNull()
         );
 
@@ -191,8 +191,8 @@ class OrderServiceTest {
         Order order = captor.getValue();
         assertThat(order.getStatus()).isEqualTo(OrderStatus.AWAITING_ACCEPTANCE);
         assertThat(order.getStore()).isSameAs(store);
-        assertThat(order.getShippingAmount()).isEqualByComparingTo("0.00");
-        assertThat(order.getTotalAmount()).isEqualByComparingTo("59.70");
+        assertThat(order.getShippingAmount()).isEqualByComparingTo("10.90");
+        assertThat(order.getTotalAmount()).isEqualByComparingTo("70.60");
         assertThat(order.getDeliveryAddress().getZipCode()).isEqualTo("87000000");
         assertThat(order.getItems()).hasSize(2);
 
@@ -203,7 +203,7 @@ class OrderServiceTest {
         verify(cartRepository).saveAndFlush(cart);
 
         assertThat(response.payment().result()).isEqualTo(PaymentResult.APPROVED);
-        assertThat(response.order().shippingAmount()).isEqualByComparingTo("0.00");
+        assertThat(response.order().shippingAmount()).isEqualByComparingTo("10.90");
         assertThat(response.order().itemsSubtotal()).isEqualByComparingTo("59.70");
         assertThat(response.order().deliveryAddress().state()).isEqualTo("PR");
 
@@ -247,7 +247,7 @@ class OrderServiceTest {
 
         assertThat(response.order()).isNull();
         assertThat(response.payment().result()).isEqualTo(PaymentResult.DECLINED);
-        assertThat(response.payment().amount()).isEqualByComparingTo("39.80");
+        assertThat(response.payment().amount()).isEqualByComparingTo("50.70");
         assertThat(p.getQuantity()).isEqualTo(5);
         assertThat(cart.getItems()).hasSize(1);
         verify(orderRepository, never()).saveAndFlush(any());

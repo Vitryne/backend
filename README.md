@@ -80,6 +80,7 @@ O `.env.example` documenta as variáveis utilizadas pelo projeto. Não versione 
 | `IMAGE_ORPHAN_RETENTION` | Não | Por quanto tempo uma imagem enviada e não usada em produto é mantida. Padrão: `24h` |
 | `IMAGE_ORPHAN_CLEANUP_INTERVAL` | Não | Intervalo da limpeza das imagens não usadas. Padrão: `PT1H` |
 | `ORDER_ACCEPTANCE_TIMEOUT` | Não | Prazo para a loja aceitar o pedido; vencido, o pedido é cancelado. Padrão: `30m` |
+| `SHIPPING_FEE` | Não | Frete fixo por pedido. Pedidos já criados mantêm o frete gravado. Padrão: `10.90` |
 | `STORE_TIMEZONE` | Não | Fuso dos horários de funcionamento das lojas, usado no `isOpen`. Padrão: `America/Sao_Paulo` |
 | `ORDER_ACCEPTANCE_EXPIRATION_INTERVAL` | Não | Intervalo da verificação dos pedidos vencidos. Padrão: `PT1M` |
 
