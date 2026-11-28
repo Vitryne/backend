@@ -80,6 +80,7 @@ O `.env.example` documenta as variáveis utilizadas pelo projeto. Não versione 
 | `IMAGE_ORPHAN_RETENTION` | Não | Por quanto tempo uma imagem enviada e não usada em produto é mantida. Padrão: `24h` |
 | `IMAGE_ORPHAN_CLEANUP_INTERVAL` | Não | Intervalo da limpeza das imagens não usadas. Padrão: `PT1H` |
 | `ORDER_ACCEPTANCE_TIMEOUT` | Não | Prazo para a loja aceitar o pedido; vencido, o pedido é cancelado. Padrão: `30m` |
+| `STORE_TIMEZONE` | Não | Fuso dos horários de funcionamento das lojas, usado no `isOpen`. Padrão: `America/Sao_Paulo` |
 | `ORDER_ACCEPTANCE_EXPIRATION_INTERVAL` | Não | Intervalo da verificação dos pedidos vencidos. Padrão: `PT1M` |
 
 ### 3. Configurar o Cloudinary (upload de imagens)
@@ -259,6 +260,17 @@ Ela pode ser importada em ferramentas como Postman e Insomnia.
 Consulte os exemplos e os campos obrigatórios diretamente no Swagger.
 
 Os cadastros de cliente e lojista possuem contratos distintos. O cadastro de um usuário não equivale à realização de login.
+
+### Lojas
+
+| Método | Endpoint | Descrição |
+| --- | --- | --- |
+| GET | `/stores` | Lojas ativas para a Home do app (público, sem token) |
+
+- Lista paginada (`page` a partir de 0 e `size` de 1 a 50, padrão 20), em ordem alfabética.
+- Aparecem só lojas ativas com pelo menos um produto ativo. Não há cálculo de distância no MVP.
+- Cada loja traz nome, descrição, categoria principal, raio de entrega, tempo de preparo, foto, banner, tags, horários de funcionamento e `isOpen` (aberta agora, no horário de Brasília).
+- Não traz CNPJ, razão social, telefone, endereço nem dados bancários.
 
 ### Fotos de produto
 
