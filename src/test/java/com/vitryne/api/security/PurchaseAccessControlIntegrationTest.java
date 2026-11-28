@@ -4,7 +4,6 @@ import com.jayway.jsonpath.JsonPath;
 import com.vitryne.api.support.PostgresIntegrationTest;
 import com.vitryne.api.support.PurchaseFixtures;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -87,15 +86,24 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
         }
 
         @Test
-        @Disabled(BUG_CART_EXCEPTIONS)
         void itemDoCarrinhoAlheioRetornaNaoEncontrado() throws Exception {
             fx.cartItem(ana, stockA, 1);
             long itemBruno = fx.cartItem(bruno, stockA, 3);
 
             mvc.perform(as(ana, put("/cart/items/" + itemBruno)).content("{\"quantity\": 1}"))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message").value("Item " + itemBruno + " não encontrado no seu carrinho"));
             mvc.perform(as(ana, delete("/cart/items/" + itemBruno)))
                     .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void operarItemSemCarrinhoRetornaNaoEncontrado() throws Exception {
+            long itemBruno = fx.cartItem(bruno, stockA, 3);
+
+            mvc.perform(as(ana, delete("/cart/items/" + itemBruno)))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message").value("Carrinho não encontrado"));
         }
 
         @Test
@@ -247,12 +255,29 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
         }
 
         @Test
-        @Disabled(BUG_CART_EXCEPTIONS)
         void falhasAoAdicionarAoCarrinhoRetornamStatusDeNegocio() throws Exception {
             mvc.perform(as(ana, post("/cart/items")).content("{\"stockId\": " + stockA + ", \"quantity\": 11}"))
-                    .andExpect(status().isConflict());
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.message").value(
+                            "Quantidade solicitada (11) maior que o estoque disponível (10) para o tamanho M"));
             mvc.perform(as(ana, post("/cart/items")).content("{\"stockId\": 999999999, \"quantity\": 1}"))
-                    .andExpect(status().isNotFound());
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message").value("Estoque 999999999 não encontrado"));
+
+            long esgotado = fx.stock(productA, "GG", 0);
+            mvc.perform(as(ana, post("/cart/items")).content("{\"stockId\": " + esgotado + ", \"quantity\": 1}"))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.message").value("O tamanho GG está esgotado"));
+        }
+
+        @Test
+        void alterarQuantidadeAcimaDoEstoqueRetornaConflito() throws Exception {
+            long item = fx.cartItem(ana, stockA, 1);
+
+            mvc.perform(as(ana, put("/cart/items/" + item)).content("{\"quantity\": 11}"))
+                    .andExpect(status().isConflict());
+
+            assertThat(fx.cartItemQuantity(item)).isEqualTo(1);
         }
     }
 
@@ -362,27 +387,10 @@ class PurchaseAccessControlIntegrationTest extends PostgresIntegrationTest {
 
     // ---------- apoio ----------
 
-    /**
-     * Bug encontrado nesta validação: exceções do carrinho (CartItemNotFound,
-     * StockNotFound, UnavailableQuantity, StockUnavailable, CartNotFound,
-     * InvalidQuantity) não têm mapeamento no GlobalExceptionHandler e viram 500.
-     * O acesso é negado e nada muda, mas o status deveria ser 404/409.
-     */
-    static final String BUG_CART_EXCEPTIONS =
-            "Bug: exceções do carrinho sem mapeamento HTTP retornam 500 (card próprio, fora da ETI-278)";
-
-    /**
-     * A operação não pode ter sucesso: aceita 4xx ou a exceção não tratada que
-     * hoje vira 500 (ver {@link #BUG_CART_EXCEPTIONS}).
-     */
+    /** A operação deve ser recusada como erro do cliente (4xx), nunca 2xx nem 500. */
     private void assertRejected(MockHttpServletRequestBuilder request) throws Exception {
-        int status;
-        try {
-            status = mvc.perform(request).andReturn().getResponse().getStatus();
-        } catch (jakarta.servlet.ServletException unhandled) {
-            status = 500;
-        }
-        assertThat(status).as("operação deveria ser recusada").isGreaterThanOrEqualTo(400);
+        int status = mvc.perform(request).andReturn().getResponse().getStatus();
+        assertThat(status).as("operação deveria ser recusada com 4xx").isBetween(400, 499);
     }
 
     private MockHttpServletRequestBuilder as(long userId, MockHttpServletRequestBuilder request) {
